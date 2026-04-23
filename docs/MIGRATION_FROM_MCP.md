@@ -102,6 +102,7 @@ See [ROADMAP.md](ROADMAP.md) for items still planned — including full MCP / CL
 ## See also
 
 - [README](../README.md) — the pitch and quick start.
-- [USAGE.md](USAGE.md) — complete command reference.
+- [SETUP.md](SETUP.md) — install and configure.
+- [EXAMPLES.md](EXAMPLES.md) — one worked example per command.
 - [TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md) — why Path B saves tokens.
 - [ARCHITECTURE.md](ARCHITECTURE.md) — how the CLI, MCP adapter and Core relate.
