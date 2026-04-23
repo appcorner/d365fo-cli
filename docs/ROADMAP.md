@@ -1,7 +1,7 @@
 # Roadmap
 
 > **Audience:** contributors and users who want to know what's coming next.
-> **Living document.** Only items that are **not yet implemented** live here. Everything already shipped is documented in [USAGE.md](USAGE.md) (user-visible surface) and [ARCHITECTURE.md](ARCHITECTURE.md) (internals). Git history preserves earlier design notes.
+> **Living document.** Only items that are **not yet implemented** live here. Everything already shipped is documented in [SETUP.md](SETUP.md) / [EXAMPLES.md](EXAMPLES.md) (user-visible surface) and [ARCHITECTURE.md](ARCHITECTURE.md) (internals). Git history preserves earlier design notes.
 
 Items are grouped by topic and ordered roughly by ROI; within a section you can pick any order.
 
@@ -122,6 +122,7 @@ Graph metrics over `ModelDependencies` + `DYNAMICSXREFDB` — surfaces cyclic de
 
 ## 9. Small items / technical debt
 
+- `d365fo init` — interactive quickstart that detects `PackagesLocalDirectory`, writes an alias / function into the user's rc profile, persists `D365FO_PACKAGES_PATH` + `D365FO_INDEX_DB`, runs `index build` + `index extract`, and ends with `doctor`. Replaces the copy-paste script documented in [SETUP.md](SETUP.md#quickstart-script).
 - `tests/D365FO.Cli.Tests` is empty — at least a smoke test of Spectre registration.
 - Audit every `Render` call site for `StringSanitizer` coverage.
 - `Models.IsCustom` single source of truth between `UpsertModelInternal` (first-seen deps) and `ApplyExtract` (`UPDATE`).
@@ -133,5 +134,5 @@ Graph metrics over `ModelDependencies` + `DYNAMICSXREFDB` — surfaces cyclic de
 
 ## See also
 
-- [USAGE.md](USAGE.md) — what you can do today.
+- [EXAMPLES.md](EXAMPLES.md) — what you can do today.
 - [ARCHITECTURE.md](ARCHITECTURE.md) — where each item fits in the codebase.

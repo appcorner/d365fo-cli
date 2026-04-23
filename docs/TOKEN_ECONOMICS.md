@@ -86,6 +86,6 @@ These need D365FO's own `IMetadataProvider` to produce XML that Visual Studio / 
 
 ## See also
 
-- [USAGE.md](USAGE.md) — how to wire Skills and the CLI into each AI agent.
+- [EXAMPLES.md](EXAMPLES.md#agent-integration) — how to wire Skills and the CLI into each AI agent.
 - [ARCHITECTURE.md](ARCHITECTURE.md) — the Metadata Bridge (case 4 above).
 - [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md) — decision tree for MCP users.

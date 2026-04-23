@@ -120,7 +120,7 @@ Configuration is environment-variable based, so it plays well with `.env` files,
 | `D365FO_LABEL_LANGUAGES` | Comma-separated languages to keep when extracting labels (default `en-us`). |
 | `D365FO_BRIDGE_ENABLED` | `1`/`true` to route reads through the live D365FO Metadata Bridge (Windows + VM only). |
 
-See [`docs/USAGE.md`](docs/USAGE.md#configure) for the full list.
+See [`docs/SETUP.md`](docs/SETUP.md#configure) for the full list.
 
 ---
 
@@ -141,7 +141,7 @@ See [`docs/USAGE.md`](docs/USAGE.md#configure) for the full list.
 | **Daemon** | `daemon start\|status\|stop` | Warm-cache daemon for latency-sensitive integrations. |
 | **Ops (Windows + VM)** | `build`, `sync`, `test run`, `bp check` | Drive `MSBuild.exe`, `SyncEngine.exe`, `SysTestRunner.exe`, `xppbp.exe`. |
 
-See the [full usage guide](docs/USAGE.md) for examples of every command.
+See [`docs/EXAMPLES.md`](docs/EXAMPLES.md) for one worked example per command.
 
 ---
 
@@ -165,7 +165,7 @@ See the [full usage guide](docs/USAGE.md) for examples of every command.
    | **Claude Code / Claude Desktop** | Point at `skills/anthropic/` (drop in the project or `~/.claude/skills/`). |
    | **Codex CLI / Gemini CLI** | Reference the relevant `SKILL.md` in your session prompt or `AGENTS.md`. |
 
-Need MCP? The `d365fo-mcp` binary speaks JSON-RPC 2.0 (protocol `2024-11-05`) over stdio and reuses the same index — wire it into Claude Desktop, Cursor, Continue, or VS Code MCP. See [`docs/USAGE.md#mcp-server`](docs/USAGE.md#mcp-server-d365fo-mcp) for a config sample.
+Need MCP? The `d365fo-mcp` binary speaks JSON-RPC 2.0 (protocol `2024-11-05`) over stdio and reuses the same index — wire it into Claude Desktop, Cursor, Continue, or VS Code MCP. See [`docs/EXAMPLES.md#mcp-server-d365fo-mcp`](docs/EXAMPLES.md#mcp-server-d365fo-mcp) for a config sample.
 
 ---
 
@@ -207,7 +207,8 @@ docs/               Deeper docs (see below)
 
 | Doc | What's inside |
 |---|---|
-| [`docs/USAGE.md`](docs/USAGE.md) | Complete setup, configuration, and command reference. |
+| [`docs/SETUP.md`](docs/SETUP.md) | Install, configure, verify — two scenarios (dev alias vs. self-contained distribution). |
+| [`docs/EXAMPLES.md`](docs/EXAMPLES.md) | One worked example per command (discover, scaffold, review, ops, agents, daemon, CI). |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | How the pieces fit together — index schema, guardrails, bridge. |
 | [`docs/TOKEN_ECONOMICS.md`](docs/TOKEN_ECONOMICS.md) | Why CLI+Skills is cheaper per turn, with numbers. |
 | [`docs/MIGRATION_FROM_MCP.md`](docs/MIGRATION_FROM_MCP.md) | Coming from `d365fo-mcp-server`? Read this first. |
@@ -224,7 +225,7 @@ docs/               Deeper docs (see below)
 | Index file appears locked | Stop any running `d365fo daemon` or `d365fo-mcp` process; WAL sidecar files (`-wal`, `-shm`) are normal. |
 | Extract missed a package | Confirm the `<root>/<Package>/<Model>/AxTable/…` layout and point `--packages` at the real `PackagesLocalDirectory`. |
 
-More in [`docs/USAGE.md#troubleshooting`](docs/USAGE.md#troubleshooting).
+More in [`docs/SETUP.md#troubleshooting`](docs/SETUP.md#troubleshooting).
 
 ---
 

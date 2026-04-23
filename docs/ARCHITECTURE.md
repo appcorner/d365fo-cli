@@ -1,7 +1,7 @@
 # Architecture
 
 > **Audience:** contributors, integrators, anyone curious about what happens under the hood.
-> **If you just want to use the tool, read [USAGE.md](USAGE.md) instead.**
+> **If you just want to use the tool, read [SETUP.md](SETUP.md) and [EXAMPLES.md](EXAMPLES.md) instead.**
 
 This document explains how `d365fo-cli` is put together: the three projects that make up the solution, the shared data contracts, the local index, and the optional Metadata Bridge used for live D365FO operations.
 
@@ -138,7 +138,7 @@ The bridge is Windows-only and must ship next to a live VM. Non-Windows develope
 
 ## See also
 
-- [USAGE.md](USAGE.md) — how to use the CLI day-to-day.
+- [SETUP.md](SETUP.md) / [EXAMPLES.md](EXAMPLES.md) — how to use the CLI day-to-day.
 - [TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md) — why CLI + Skills is cheaper per turn than MCP.
 - [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md) — coming from `d365fo-mcp-server`.
 - [ROADMAP.md](ROADMAP.md) — planned and deferred items.
