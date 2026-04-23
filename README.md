@@ -20,8 +20,6 @@ MCP servers inject every tool definition into the model's context on every turn.
 | Scriptable (PowerShell, CI) | no | yes |
 | Works in Claude Code / Codex / Gemini / Copilot agent | MCP-supporting hosts only | any harness with a shell |
 
-Projected overhead saving (per D365-erp-cli methodology): **~88 % at 10 turns, ~92 % at 20 turns**. Measured in this repo via `scripts/measure-tokens.ps1` (see `docs/TOKEN_ECONOMICS.md`).
-
 **Still need MCP?** Keep it. `D365FO.Mcp` is a thin adapter over the same `D365FO.Core` used by the CLI — one source of truth.
 
 ## Layout
@@ -90,16 +88,6 @@ To use them:
 - **Codex CLI / Gemini CLI**: reference the relevant `SKILL.md` in your session prompt.
 
 Seed skills ship covering: [X++ class authoring](skills/_source/x++-class-authoring.md), [table scaffolding](skills/_source/table-scaffolding.md), [CoC extension authoring](skills/_source/coc-extension-authoring.md), [security hierarchy tracing](skills/_source/security-hierarchy-trace.md), [label translation](skills/_source/label-translation.md).
-
-## Roadmap
-
-Phase 0–3 land in this repo: solution bootstrap, Core + Index, representative command set (search/get/find/index/doctor/agent-prompt/schema), dual skills generator. Follow-up phases as described in `docs/PLAN.md`:
-
-- Phase 1 finish — XML extract pipeline to populate the index from `PACKAGES_PATH` / `D365MetadataBridge` absorption.
-- Phase 2 finish — parity for all 54 upstream MCP tools (generate, build, sync, test, bp, review).
-- Phase 4 finish — MCP JSON-RPC transport on top of `ToolHandlers`.
-- Phase 5 — self-contained publish (`dotnet publish -r win-x64 --self-contained`), Authenticode, winget/scoop.
-- Phase 6 (optional) — `d365fo daemon` for warm SQLite.
 
 See full plan, token-economics analysis, and migration notes in [docs/](docs/).
 
