@@ -39,6 +39,8 @@ tests/           xUnit (Core + CLI)
 
 ## Quick start
 
+> 📖 **Full setup & usage guide: [docs/USAGE.md](docs/USAGE.md)**
+
 ```sh
 dotnet build d365fo-cli.slnx -c Release
 
