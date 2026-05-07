@@ -1,11 +1,11 @@
-﻿---
+---
 description: Inspect indexed D365FO models, their declared dependencies, and architectural coupling metrics (fan-in, fan-out, instability, cycles). Use when the user asks "what models depend on X", "is there a cycle", "what's the layer of model Y", or "show coupling".
 applyTo: '**/Descriptor/*.xml,**/AxModel/**'
 ---
 # Models, dependencies, coupling
 
 > The CLI's `models` group reads the `Descriptor/*.xml` files indexed during
-> `d365fo index extract` â€” no live AOT round-trip needed. All commands return
+> `d365fo index extract` — no live AOT round-trip needed. All commands return
 > JSON envelopes; pair with `jq` for narrow projections.
 
 ## Inspect models
@@ -32,8 +32,8 @@ Output highlights:
 | Metric | Meaning | Action threshold |
 |---|---|---|
 | `fanIn`         | How many models depend on **this** one | Stable foundations should have high fan-in. |
-| `fanOut`        | How many models **this** one depends on | High fan-out â†’ refactor candidate. |
-| `instability`   | `fanOut / (fanIn + fanOut)` âˆˆ [0, 1] | Stable=0; volatile=1. Domain models near 0; edge integrations near 1. |
+| `fanOut`        | How many models **this** one depends on | High fan-out → refactor candidate. |
+| `instability`   | `fanOut / (fanIn + fanOut)` ∈ [0, 1] | Stable=0; volatile=1. Domain models near 0; edge integrations near 1. |
 | `cycles[]`      | Strongly-connected component groups | Any non-empty entry is a hard error. |
 
 ## When to invoke
@@ -48,9 +48,9 @@ Output highlights:
 ## Hard rules
 
 - Never extend / depend on a `cus*` (customer-layer) model from an ISV model
-  â€” D365FO disallows the upward dependency.
-- Never introduce a cycle â€” even a 2-node cycle blocks compilation.
-- Layer ordering (lowest â†’ highest): `sys â†’ syp â†’ isv â†’ iss â†’ cus â†’ cup â†’ usr â†’ usp`.
+  — D365FO disallows the upward dependency.
+- Never introduce a cycle — even a 2-node cycle blocks compilation.
+- Layer ordering (lowest → highest): `sys → syp → isv → iss → cus → cup → usr → usp`.
   Each layer can only consume *lower* layers.
 - After modifying any `Descriptor/*.xml`, run `d365fo index refresh` so
   subsequent `models deps` / `models coupling` reflects reality.

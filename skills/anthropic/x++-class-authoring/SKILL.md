@@ -1,4 +1,4 @@
-﻿---
+---
 name: x++-class-authoring
 description: Guidance for authoring or extending X++ classes in D365 Finance & Operations. Invoke whenever the user asks to "create a class", "extend a class", "add a method", or write any X++ that touches CoC.
 applies_when: User intent mentions X++ classes, Chain-of-Command, SysOperation, controller/service patterns, or method overrides.
@@ -33,8 +33,8 @@ conversation with long metadata dumps.
 
 4. **Validate at the end**:
    ```sh
-   d365fo review diff          # (when available) â€” best-practice delta
-   d365fo bp check             # (when available) â€” xppbp.exe runner
+   d365fo review diff          # (when available) — best-practice delta
+   d365fo bp check             # (when available) — xppbp.exe runner
    ```
 
 ## Hard rules
@@ -42,6 +42,6 @@ conversation with long metadata dumps.
 - **Never** emit X++ that references a field you have not verified with
   `d365fo get table <Name>`.
 - **Never** create a CoC wrapper without first running `d365fo find coc`.
-- **Prefer** EDTs over primitive types â€” resolve with `d365fo get edt <Name>`.
+- **Prefer** EDTs over primitive types — resolve with `d365fo get edt <Name>`.
 - **Expect** a `ToolResult` envelope on every command. On `ok:false`, surface
   `error.message` to the user and stop the task.
