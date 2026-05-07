@@ -1,33 +1,61 @@
-# d365fo-cli
+# d365fo — AI-native CLI for D365 Finance & Operations X++
 
-> **A command-line toolkit for Dynamics 365 Finance & Operations X++ development — designed for AI agents, usable by humans.**
+> **Index your AOT. Search it in milliseconds. Scaffold objects that compile. Ground every AI answer in real metadata.**
 
-`d365fo-cli` indexes your D365 F&O AOT metadata into a local database and gives you one friendly command — `d365fo` — to search it, scaffold new objects, review changes, and drive the D365FO developer tools. It is the successor to [`d365fo-mcp-server`](https://github.com/dynamics365ninja/d365fo-mcp-server) and works with every major AI assistant: GitHub Copilot, Claude (Code / Desktop), Cursor, Codex, and Gemini.
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![.NET](https://img.shields.io/badge/.NET-10-purple.svg)](https://dotnet.microsoft.com/)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)]()
+[![Successor to d365fo-mcp-server](https://img.shields.io/badge/successor%20to-d365fo--mcp--server-orange.svg)](https://github.com/dynamics365ninja/d365fo-mcp-server)
 
----
-
-## What you get
-
-- 🔎 **Instant AOT lookup** — find tables, classes, EDTs, enums, forms, queries, views, reports, services, workflows, security roles, and labels in milliseconds, without touching a D365 VM.
-- 🏗️ **Scaffold X++ objects** — generate ready-to-use XML for tables, classes, Chain-of-Command extensions, and AxForms (all nine D365FO patterns: `SimpleList`, `SimpleListDetails`, `DetailsMaster`, `DetailsTransaction`, `Dialog`, `TableOfContents`, `Lookup`, `ListPage`, `Workspace`); optionally drop them straight into a model folder.
-- 🕵️ **Understand the code** — trace CoC targets, relations, event handlers, label translations, and reverse references across your workspace.
-- 🤖 **AI-ready** — every command returns a stable JSON envelope, so agents can parse results reliably. A pre-built system prompt and lazy-loaded Skills keep token usage low.
-- 🧪 **Scriptable** — runs in PowerShell, bash/zsh, CI/CD pipelines, and cron jobs. No host application required.
-- 🪟 **Optional VM integration** — when run on a D365FO developer VM, it also drives `MSBuild`, `SyncEngine`, `SysTestRunner`, and `xppbp`.
-- 🧩 **MCP still supported** — a thin `d365fo-mcp` adapter ships alongside, sharing the same index.
-
-Cross-platform: **Windows, macOS, Linux**. You only need Windows for build/sync/test/bp commands on a real D365FO VM — all indexing, searching, and scaffolding works anywhere.
+Built for D365FO developers and AI agents that need **real AOT metadata** — not training-data guesses.
 
 ---
 
-## Installation
+## Why this exists
+
+Every AI assistant hallucinates D365 field names, method signatures, and label IDs. The root cause is simple: your environment has hundreds of thousands of custom objects that no model has ever seen. The fix is equally simple: **give the agent a local index it can query before generating any code**.
+
+| Without `d365fo` | With `d365fo` |
+|---|---|
+| Agent invents `CustTable.CustomerName` (doesn't exist) | `d365fo get table CustTable` returns the real field list in <100 ms |
+| CoC wrapper copies default-param values → compile error | `d365fo find coc Class::method` returns exact signature — no guessing |
+| Label IDs typed by hand → `BPErrorUnknownLabel` BP failures | `d365fo search label "customer account"` finds the right `@SYS…` token |
+| 54 MCP tool definitions burn ~2,900 tokens every turn | 1 shell command + lazy-loaded Skills ≈ 100 tokens per turn |
+| Scaffolded XML missing ActionPane / QuickFilter / PatternVersion | `d365fo generate form` uses validated pattern templates |
+| `today()` in generated X++ → `BPUpgradeCodeToday` failure | Agent receives the X++ rule canon from `.github/copilot-instructions.md` |
+
+---
+
+## Solution Architecture
+
+![Solution Architecture](docs/img/solution-architecture-diagram.png)
+
+The CLI sits between your AI agent and the D365FO metadata layer. It exposes a single `d365fo` binary that queries a local SQLite index (or a live metadata bridge on Windows VMs) and returns stable JSON envelopes your agent can parse in one tool call.
+
+---
+
+## Key Capabilities
+
+- **Instant AOT lookup** — tables, classes, EDTs, enums, forms, queries, views, reports, services, workflows, security roles, and labels; results in milliseconds without touching a D365 VM
+- **Scaffold X++ objects** — pattern-validated XML for tables, classes, CoC extensions, and AxForms (all 9 D365FO patterns: `SimpleList`, `SimpleListDetails`, `DetailsMaster`, `DetailsTransaction`, `Dialog`, `TableOfContents`, `Lookup`, `ListPage`, `Workspace`)
+- **Understand the code** — trace CoC targets, inbound/outbound relations, event handlers, label translations, and cross-references across your workspace
+- **AI-ready JSON** — every command returns a stable `{ ok, data, warnings }` envelope; agents parse once, never re-adapt
+- **15 lazy-loaded Skills** — full X++/CoC/BP rule canon (database queries, class rules, statement types, best practices) loaded only when relevant; ~90% fewer tokens per workflow than MCP
+- **Daemon mode** — warm-cache named-pipe server with file-system watcher; auto-refreshes index on AOT XML changes (debounce configurable)
+- **CI / pipeline ready** — runs in PowerShell, bash/zsh, GitHub Actions, Azure DevOps; no GUI required
+- **Optional VM integration** — drives `MSBuild`, `SyncEngine`, `SysTestRunner`, and `xppbp` on Windows D365FO dev VMs
+- **MCP adapter included** — `d365fo-mcp` speaks JSON-RPC 2.0 and shares the same index; wire into Claude Desktop, Cursor, Continue, or VS Code MCP
+
+---
+
+## Quick Start
 
 ### Prerequisites
 
-- .NET SDK 10 (the repo's `global.json` pins the exact version).
-- Optional: `git` (for `review diff`), Python 3.8+ or PowerShell 7 (to regenerate Skills).
+- [.NET SDK 10](https://dotnet.microsoft.com/download) (pinned in `global.json`)
+- Access to a D365 F&O `PackagesLocalDirectory` (local clone, Azure Files share, or Windows VM path)
 
-### Build from source
+### Install
 
 ```sh
 git clone https://github.com/dynamics365ninja/d365fo-cli.git
@@ -35,172 +63,147 @@ cd d365fo-cli
 dotnet build d365fo-cli.slnx -c Release
 ```
 
-### Add `d365fo` to your PATH
+**PowerShell alias (fastest for dev):**
 
-**Option A — shell alias (fastest):**
-
-```sh
-# bash / zsh
-alias d365fo='dotnet run --project /path/to/d365fo-cli/src/D365FO.Cli --'
-
-# PowerShell
+```powershell
 function d365fo { dotnet run --project C:\path\to\d365fo-cli\src\D365FO.Cli -- @args }
 ```
 
-**Option B — standalone binary (distribution):**
+**Self-contained binary (for distribution):**
 
 ```sh
 dotnet publish src/D365FO.Cli -c Release -r win-x64 --self-contained
-# or: -r linux-x64, -r osx-arm64
+# also: linux-x64, osx-arm64
 ```
 
-Rename the output executable to `d365fo` (or `d365fo.exe`) and place it on your `PATH`.
-
-### Verify
+### First run
 
 ```sh
-d365fo version
-d365fo doctor     # environment checklist (SDK, env vars, index, workspace)
-```
+# Point at your packages folder
+$env:D365FO_PACKAGES_PATH = "K:\AosService\PackagesLocalDirectory"
 
----
-
-## Quick Start
-
-```sh
-# 1. Tell the CLI where your PackagesLocalDirectory is
-export D365FO_PACKAGES_PATH=/mnt/d365fo/PackagesLocalDirectory
-export D365FO_INDEX_DB=$HOME/.d365fo/index.sqlite
-
-# 2. Create the local index
+# Build + populate the index
 d365fo index build
-
-# 3. Ingest AOT metadata (full, or scoped to a model)
 d365fo index extract
-d365fo index extract --model ApplicationSuite
 
-# 4. Ask the index anything
-d365fo search class Cust
-d365fo get table CustTable
-d365fo find coc CustTable::validateWrite
-d365fo resolve label @SYS12345 --lang en-US,cs
+# Verify
+d365fo doctor --output json
+d365fo index status --output json
 
-# 5. Scaffold a new table
+# Search
+d365fo search table Cust --output json
+d365fo get table CustTable --output json
+d365fo find coc SalesTable::insert --output json
+d365fo resolve label @SYS12345 --lang en-us,cs
+```
+
+### Scaffold your first object
+
+```sh
+# New table
 d365fo generate table FmVehicle \
   --label "@Fleet:Vehicle" \
   --field VIN:VinEdt:mandatory \
   --field Make:Name \
+  --field Year:YearEdt \
   --out src/MyModel/AxTable/FmVehicle.xml
 
-# 6. Emit a system prompt for your AI agent
-d365fo agent-prompt --out .prompts/d365fo.md
+# Chain-of-Command extension
+d365fo generate coc SalesTable --method insert --out src/MyModel/AxClass/SalesTable_MyExt.xml
+
+# Form (SimpleList pattern)
+d365fo generate form FmVehicles \
+  --pattern SimpleList \
+  --table FmVehicle \
+  --field VIN --field Make --field Year \
+  --out src/MyModel/AxForm/FmVehicles.xml
 ```
 
-Every command returns a predictable JSON envelope:
+---
+
+## AI Agent Integration
+
+### GitHub Copilot (VS Code / Visual Studio)
+
+Copy `.github/copilot-instructions.md` into your consuming repo's `.github/` folder. It contains the full X++ rule canon with MS Learn citations.
+
+Optionally copy the Skills:
+
+```sh
+# Emit GitHub Copilot instructions
+python3 scripts/emit-skills.py
+
+# Then copy to your repo
+cp skills/copilot/*.instructions.md /your-repo/.github/instructions/
+```
+
+### Claude Code / Claude Desktop
+
+```sh
+# Emit Anthropic SKILL.md files
+python3 scripts/emit-skills.py
+
+# Reference in your project or ~/.claude/skills/
+cp -r skills/anthropic/ /your-repo/.claude/skills/
+```
+
+### Codex CLI / Gemini CLI / Cursor
+
+Reference the `SKILL.md` files from `skills/anthropic/` in your session prompt or `AGENTS.md`.
+
+### MCP (Claude Desktop, Continue, VS Code MCP)
 
 ```json
-{ "ok": true,  "data": { /* … */ }, "warnings": [] }
-{ "ok": false, "error": { "code": "…", "message": "…", "hint": "…" } }
+{
+  "mcpServers": {
+    "d365fo": {
+      "command": "d365fo-mcp",
+      "args": [],
+      "env": {
+        "D365FO_PACKAGES_PATH": "K:\\AosService\\PackagesLocalDirectory"
+      }
+    }
+  }
+}
 ```
 
-In an interactive terminal you get nicely rendered tables. In scripts and pipes you get JSON automatically. Force either with `--output json|table|raw`.
-
 ---
 
-## Configuration
+## Why CLI instead of MCP?
 
-Configuration is environment-variable based, so it plays well with `.env` files, CI secrets, and launch profiles.
-
-| Variable | Purpose |
-|---|---|
-| `D365FO_PACKAGES_PATH` | Root of D365 F&O `PackagesLocalDirectory` (needed for `index extract`). |
-| `D365FO_INDEX_DB` | Path to the local SQLite index. Defaults to your local app-data folder. |
-| `D365FO_WORKSPACE_PATH` | Root of your X++ workspace (used by `review diff`). |
-| `D365FO_CUSTOM_MODELS` | Comma-separated patterns marking your own models (wildcards `*`, `?`, negation `!`). |
-| `D365FO_LABEL_LANGUAGES` | Comma-separated languages to keep when extracting labels (default `en-us`). |
-| `D365FO_BRIDGE_ENABLED` | `1`/`true` to route reads through the live D365FO Metadata Bridge (Windows + VM only). |
-
-See [`docs/SETUP.md`](docs/SETUP.md#configure) for the full list.
-
----
-
-## Commands
-
-| Group | Commands | What it does |
-|---|---|---|
-| **Index** | `index build`, `index extract`, `index status` | Build, populate, and inspect the local metadata cache. |
-| **Search** | `search class\|table\|edt\|enum\|form\|query\|view\|entity\|report\|service\|workflow\|label` | Fuzzy-find AOT objects by name. |
-| **Get** | `get table\|class\|edt\|enum\|form\|menu-item\|security\|label\|role\|duty\|privilege\|query\|view\|entity\|report\|service\|service-group` | Fetch full details (fields, methods, relations, indexes, …). |
-| **Find** | `find coc`, `find relations`, `find usages`, `find extensions`, `find handlers`, `find refs` | Trace Chain-of-Command, references, handlers, relationships. |
-| **Read** | `read class`, `read table`, `read form` | Pull source snippets for a method, declaration, or range. |
-| **Resolve** | `resolve label` | Look up multi-language label text by token. |
-| **Generate** | `generate table\|class\|coc\|form\|entity\|extension\|event-handler\|privilege\|duty\|role` | Scaffold AOT XML for new objects (forms support 9 D365FO patterns). |
-| **Review** | `review diff` | Lint AOT changes between two git revs. |
-| **Models** | `models list`, `models deps` | List models and trace dependencies. |
-| **Agent** | `agent-prompt`, `schema` | Emit system prompts and machine-readable catalogs for AI agents. |
-| **Daemon** | `daemon start\|status\|stop` | Warm-cache daemon for latency-sensitive integrations. |
-| **Ops (Windows + VM)** | `build`, `sync`, `test run`, `bp check` | Drive `MSBuild.exe`, `SyncEngine.exe`, `SysTestRunner.exe`, `xppbp.exe`. |
-
-See [`docs/EXAMPLES.md`](docs/EXAMPLES.md) for one worked example per command.
-
----
-
-## AI agent integration
-
-`d365fo-cli` is built to be driven by AI agents. Two pieces make that easy:
-
-1. **A system prompt** that tells the agent what commands exist and the full X++/CoC/BP rule canon (including MS Learn citations):
-   ```sh
-   d365fo agent-prompt --out .prompts/d365fo.md
-   ```
-   The same canon is also available as [`/.github/copilot-instructions.md`](.github/copilot-instructions.md) for GitHub Copilot — drop it in the consuming repo's `.github/` folder.
-2. **Skills** (15 topics) — short, lazy-loaded recipes covering the X++ rule canon ported from `d365fo-mcp-server`. Generation workflows: table scaffolding (with pattern presets), form patterns (9 templates), CoC extensions, object extensions (Table/Form/Edt/Enum), data entities, event handlers, label CRUD, security hierarchy. Language rules: X++ database queries (`select` / `crossCompany` / `in` / set-based ops), class & method rules (modifier order, fields-protected), statement & type rules (switch, ternary, no-DB-null sentinels, `as`/`is`), and best-practice rules (`BPUpgradeCodeToday`, `BPErrorLabelIsText`, alt-key, doc comments). Analyst skills: model dependency / coupling, Git-checkpoint review workflow. Source skills live in [`skills/_source/`](skills/_source/) and are emitted in two formats:
-
-   ```sh
-   python3 scripts/emit-skills.py     # or: pwsh scripts/emit-skills.ps1
-   ```
-
-   | Agent | Where to put the skills |
-   |---|---|
-   | **GitHub Copilot** (VS Code / Visual Studio) | Copy `skills/copilot/*.instructions.md` into `.github/instructions/`. |
-   | **Claude Code / Claude Desktop** | Point at `skills/anthropic/` (drop in the project or `~/.claude/skills/`). |
-   | **Codex CLI / Gemini CLI** | Reference the relevant `SKILL.md` in your session prompt or `AGENTS.md`. |
-
-Need MCP? The `d365fo-mcp` binary speaks JSON-RPC 2.0 (protocol `2024-11-05`) over stdio and reuses the same index — wire it into Claude Desktop, Cursor, Continue, or VS Code MCP. See [`docs/EXAMPLES.md#mcp-server-d365fo-mcp`](docs/EXAMPLES.md#mcp-server-d365fo-mcp) for a config sample.
-
----
-
-## Why a CLI instead of MCP?
-
-MCP servers inject every tool definition into the model's context on every single turn. For this project that used to be **54 tools ≈ 2,900 tokens every turn**. A CLI + Skills approach flips that:
+MCP servers inject every tool definition into the model's context on every single turn. For this project that used to be **54 tools ≈ 2,900 tokens every turn**.
 
 | | MCP server | CLI + Skills |
 |---|---|---|
 | Tool definitions per turn | 54 tools (~2,900 tokens) | 1 shell tool (~100 tokens) |
 | Discovery round-trips | 2–3 per task | often 1 (`d365fo get table X`) |
-| Scriptable (shell, CI) | No | Yes |
-| Works in any AI harness with a shell | No — MCP-supporting hosts only | Yes — Copilot, Claude Code, Codex, Gemini, … |
+| Scriptable (shell, CI/CD) | No | Yes |
+| Works in any AI harness | No — MCP hosts only | Yes — Copilot, Claude, Codex, Gemini, … |
+| Token cost over 15-turn workflow | baseline | **~90% reduction** |
 
-Over a 15-turn workflow that typically means **~90% fewer tokens spent on tool plumbing**. See [`docs/TOKEN_ECONOMICS.md`](docs/TOKEN_ECONOMICS.md) for the full math and the cases where MCP still wins.
+See [`docs/TOKEN_ECONOMICS.md`](docs/TOKEN_ECONOMICS.md) for the full analysis and the cases where MCP still wins.
 
 ---
 
-## Project layout
+## Commands at a Glance
 
-```
-src/
-  D365FO.Core/      Shared library (index, repository, guardrails, scaffolding)
-  D365FO.Cli/       The `d365fo` command-line binary (Spectre.Console.Cli)
-  D365FO.Mcp/       Optional MCP server (shares D365FO.Core)
-  D365FO.Bridge/    Optional net48 metadata bridge (Windows + D365FO VM)
-skills/
-  _source/          Source Skills (Markdown + YAML)
-  copilot/          Emitted GitHub Copilot instructions
-  anthropic/        Emitted Anthropic SKILL.md
-scripts/            emit-skills.py / emit-skills.ps1
-tests/              xUnit test suites
-docs/               Deeper docs (see below)
-```
+| Group | Commands |
+|---|---|
+| **Index** | `index build`, `index extract`, `index refresh`, `index status` |
+| **Discover** | `search class\|table\|edt\|enum\|form\|query\|view\|entity\|report\|service\|workflow\|label` |
+| **Get** | `get table\|class\|edt\|enum\|form\|menu-item\|security\|label\|role\|duty\|privilege\|query\|view\|entity\|report\|service` |
+| **Find** | `find coc`, `find relations`, `find usages`, `find extensions`, `find handlers`, `find refs`, `find form-patterns` |
+| **Read** | `read class`, `read table`, `read form` |
+| **Resolve** | `resolve label` |
+| **Generate** | `generate table\|class\|coc\|form\|entity\|extension\|event-handler\|privilege\|duty\|role` |
+| **Analyze** | `analyze completeness`, `lint`, `suggest extension` |
+| **Review** | `review diff` |
+| **Models** | `models list`, `models deps` |
+| **Agent** | `agent-prompt`, `schema` |
+| **Daemon** | `daemon start\|status\|stop` |
+| **Ops (Windows VM)** | `build`, `sync`, `test run`, `bp check` |
+
+See [`docs/EXAMPLES.md`](docs/EXAMPLES.md) for one worked example per command.
 
 ---
 
@@ -208,12 +211,12 @@ docs/               Deeper docs (see below)
 
 | Doc | What's inside |
 |---|---|
-| [`docs/SETUP.md`](docs/SETUP.md) | Install, configure, verify — two scenarios (dev alias vs. self-contained distribution). |
-| [`docs/EXAMPLES.md`](docs/EXAMPLES.md) | One worked example per command (discover, scaffold, review, ops, agents, daemon, CI). |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | How the pieces fit together — index schema, guardrails, bridge. |
-| [`docs/TOKEN_ECONOMICS.md`](docs/TOKEN_ECONOMICS.md) | Why CLI+Skills is cheaper per turn, with numbers. |
-| [`docs/MIGRATION_FROM_MCP.md`](docs/MIGRATION_FROM_MCP.md) | Coming from `d365fo-mcp-server`? Read this first. |
-| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Planned and deferred items. |
+| [docs/SETUP.md](docs/SETUP.md) | Install, configure, verify — dev alias vs. self-contained distribution |
+| [docs/EXAMPLES.md](docs/EXAMPLES.md) | One worked example per command (discover, scaffold, review, ops, agents, daemon, CI) |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Index schema (v9), guardrails, bridge, daemon file watcher |
+| [docs/TOKEN_ECONOMICS.md](docs/TOKEN_ECONOMICS.md) | Why CLI+Skills is cheaper per turn, with numbers |
+| [docs/MIGRATION_FROM_MCP.md](docs/MIGRATION_FROM_MCP.md) | Coming from `d365fo-mcp-server`? Read this first |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Planned and deferred items |
 
 ---
 
@@ -221,18 +224,19 @@ docs/               Deeper docs (see below)
 
 | Symptom | Fix |
 |---|---|
-| `PACKAGES_PATH_NOT_FOUND` | Set `D365FO_PACKAGES_PATH` or pass `--packages <PATH>`. |
-| `UNSUPPORTED_PLATFORM` | `build` / `sync` / `test` / `bp` require Windows + a D365FO dev VM. |
-| Index file appears locked | Stop any running `d365fo daemon` or `d365fo-mcp` process; WAL sidecar files (`-wal`, `-shm`) are normal. |
-| Extract missed a package | Confirm the `<root>/<Package>/<Model>/AxTable/…` layout and point `--packages` at the real `PackagesLocalDirectory`. |
+| `PACKAGES_PATH_NOT_FOUND` | Set `D365FO_PACKAGES_PATH` or pass `--packages <PATH>` |
+| `UNSUPPORTED_PLATFORM` | `build` / `sync` / `test` / `bp` require Windows + a D365FO dev VM |
+| `NO_INDEX` | Run `d365fo index build` then `d365fo index extract` |
+| Index appears stale after editing XML | Run `d365fo index refresh --model <Model>` |
+| Index file locked | Stop any running `d365fo daemon` or `d365fo-mcp` process; WAL sidecar files (`-wal`, `-shm`) are normal |
 
-More in [`docs/SETUP.md#troubleshooting`](docs/SETUP.md#troubleshooting).
+More in [docs/SETUP.md](docs/SETUP.md#troubleshooting).
 
 ---
 
 ## License
 
-MIT. The upstream [`d365fo-mcp-server`](https://github.com/dynamics365ninja/d365fo-mcp-server) is also MIT.
+MIT. The sibling [`d365fo-mcp-server`](https://github.com/dynamics365ninja/d365fo-mcp-server) is also MIT.
 
 ---
 
