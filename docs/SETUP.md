@@ -198,6 +198,149 @@ d365fo doctor
 
 ---
 
+## Visual Studio 2022 / 2026 integration
+
+D365FO development happens in Visual Studio with the **Dynamics 365 Finance and Operations** developer tools. This section wires up `d365fo` as an External Tool and installs the GitHub Copilot Skills into your X++ project so Copilot has the X++ rule canon in scope at all times.
+
+### 1. Prerequisites
+
+- Visual Studio 2022 or 2026 with the **Dynamics 365 Finance and Operations** workload installed.
+- [GitHub Copilot extension](https://marketplace.visualstudio.com/items?itemName=GitHub.copilotvs) installed in Visual Studio (supports VS 2022 17.10+ and VS 2026).
+- `d365fo` reachable on `PATH` (Scenario A alias or Scenario B binary from the **Install** section above).
+
+### 2. Register `d365fo` as an External Tool
+
+External Tools let you run any CLI command from the **Tools** menu without leaving Visual Studio.
+
+1. Open **Tools → External Tools…**
+2. Click **Add** and fill in:
+
+   | Field | Value |
+   |---|---|
+   | Title | `d365fo: index status` |
+   | Command | `d365fo` |
+   | Arguments | `index status --output json` |
+   | Initial directory | `$(SolutionDir)` |
+   | ☑ Use Output window | checked |
+
+3. Repeat for any commands you want one-click access to (e.g. `index refresh --model $(ProjectName)`, `lint --output json`).
+4. Click **OK**.
+
+> **Tip.** Add a second entry with **Arguments** = `doctor --output json` to run a health check straight from the menu.
+
+### 3. Copy Skills and Copilot instructions to your X++ project
+
+GitHub Copilot in Visual Studio reads `.github/copilot-instructions.md` and `.github/instructions/*.instructions.md` from the root of your solution (repository). Deploying these files gives Copilot the full X++ rule canon — D365FO table/method names, CoC rules, BP rules, label rules — without burning context tokens.
+
+**Automated script** — run once per X++ project (re-run after `d365fo-cli` updates to pick up new Skills):
+
+```powershell
+# Install-D365FoCopilotSkills.ps1
+# Usage:
+#   .\Install-D365FoCopilotSkills.ps1 -CliRepo C:\source\d365fo-cli -XppRepo K:\D365FO\MyProject
+#
+# Parameters:
+#   -CliRepo   Path to your d365fo-cli clone (source of skills + copilot-instructions.md)
+#   -XppRepo   Root of your X++ project / solution repository (target)
+
+param(
+    [Parameter(Mandatory)][string] $CliRepo,
+    [Parameter(Mandatory)][string] $XppRepo
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$src      = Join-Path $CliRepo 'skills\copilot'
+$canon    = Join-Path $CliRepo '.github\copilot-instructions.md'
+$dstRoot  = Join-Path $XppRepo '.github'
+$dstInstr = Join-Path $dstRoot 'instructions'
+
+# Create target directories if absent
+New-Item -ItemType Directory -Force -Path $dstRoot  | Out-Null
+New-Item -ItemType Directory -Force -Path $dstInstr | Out-Null
+
+# Copy the main X++ rule canon
+if (Test-Path $canon) {
+    Copy-Item -Path $canon -Destination $dstRoot -Force
+    Write-Host "[OK] copilot-instructions.md  →  $dstRoot"
+} else {
+    Write-Warning "copilot-instructions.md not found at: $canon"
+}
+
+# Copy all 15 Skills (.instructions.md)
+$skills = Get-ChildItem -Path $src -Filter '*.instructions.md'
+if ($skills.Count -eq 0) {
+    Write-Warning "No *.instructions.md files found in: $src"
+    Write-Warning "Run 'python scripts/emit-skills.py' in the d365fo-cli repo first."
+} else {
+    foreach ($f in $skills) {
+        Copy-Item -Path $f.FullName -Destination $dstInstr -Force
+        Write-Host "[OK] $($f.Name)  →  $dstInstr"
+    }
+}
+
+Write-Host ""
+Write-Host "Done. $($skills.Count) skill(s) + copilot-instructions.md deployed to $XppRepo"
+Write-Host "Restart Visual Studio (or reload the solution) to apply."
+```
+
+**Example invocation:**
+
+```powershell
+.\Install-D365FoCopilotSkills.ps1 `
+    -CliRepo  "C:\source\d365fo-cli" `
+    -XppRepo  "K:\D365FO\MyProject"
+```
+
+After the script runs your X++ repository will have:
+
+```
+.github/
+  copilot-instructions.md          ← full X++ / CoC / BP rule canon
+  instructions/
+    coc-extension-authoring.instructions.md
+    data-entity-scaffolding.instructions.md
+    event-handler-authoring.instructions.md
+    form-pattern-scaffolding.instructions.md
+    label-translation.instructions.md
+    model-dependency-and-coupling.instructions.md
+    object-extension-authoring.instructions.md
+    review-and-checkpoint-workflow.instructions.md
+    security-hierarchy-trace.instructions.md
+    table-scaffolding.instructions.md
+    x++-class-authoring.instructions.md
+    xpp-best-practice-rules.instructions.md
+    xpp-class-and-method-rules.instructions.md
+    xpp-database-queries.instructions.md
+    xpp-statement-and-type-rules.instructions.md
+```
+
+Commit these files so every developer on the project gets the same Copilot context automatically.
+
+### 4. Keep Skills up to date
+
+When you pull a new version of `d365fo-cli`, re-emit the Skills and re-run the install script:
+
+```powershell
+# In the d365fo-cli clone
+cd C:\source\d365fo-cli
+git pull
+python scripts/emit-skills.py
+
+# Re-deploy to your X++ project
+.\Install-D365FoCopilotSkills.ps1 `
+    -CliRepo "C:\source\d365fo-cli" `
+    -XppRepo "K:\D365FO\MyProject"
+
+# Then commit the updated files in your X++ project
+cd K:\D365FO\MyProject
+git add .github/
+git commit -m "chore: update d365fo Copilot skills"
+```
+
+---
+
 ## Verify
 
 ```sh
