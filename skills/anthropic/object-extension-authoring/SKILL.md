@@ -1,13 +1,13 @@
----
+﻿---
 name: object-extension-authoring
 description: Create a Table / Form / Edt / Enum extension (NOT a class CoC extension) in D365 Finance & Operations. Use when the user asks to "extend a table", "add a field to standard CustTable", "extend an EDT", "add an enum value", or "extend a form via FormExtension".
-applies_when: User intent mentions extending a Table / Form / Edt / Enum (not a class) — adding fields to a standard table, adding controls to a standard form, extending an enum or EDT.
+applies_when: User intent mentions extending a Table / Form / Edt / Enum (not a class) â€” adding fields to a standard table, adding controls to a standard form, extending an enum or EDT.
 ---
 # Authoring object extensions (Table / Form / Edt / Enum)
 
 > Object extensions are the **non-intrusive** way to add fields to standard
 > tables, controls to standard forms, members to standard enums, and tighten
-> standard EDTs. Unlike CoC class extensions they do not wrap method calls —
+> standard EDTs. Unlike CoC class extensions they do not wrap method calls â€”
 > they merge metadata at compile time.
 
 ## When to use which
@@ -18,7 +18,7 @@ applies_when: User intent mentions extending a Table / Form / Edt / Enum (not a 
 | Add a control / data source / FastTab to a standard form | `extension Form CustTableListPage <Suffix>` |
 | Tighten an EDT (e.g. lengthen a string, adjust label) | `extension Edt CustAccount <Suffix>` |
 | Add new members to a base enum | `extension Enum NoYes <Suffix>` |
-| Add behaviour to a class method | **NOT this** — use `coc-extension-authoring` instead |
+| Add behaviour to a class method | **NOT this** â€” use `coc-extension-authoring` instead |
 
 ## Pre-flight
 
@@ -59,12 +59,12 @@ Re-run `d365fo index refresh --model <Model>` so subsequent
 ## Hard rules
 
 - Never have two extensions with the same `<Target>.<Suffix>` in the same
-  model — `d365fo find extensions` first.
-- Never use `extension` for class behaviour changes — that is CoC's job
+  model â€” `d365fo find extensions` first.
+- Never use `extension` for class behaviour changes â€” that is CoC's job
   (`d365fo generate coc <Class>`).
-- Never modify the standard object directly (over-layering) — extensions are
+- Never modify the standard object directly (over-layering) â€” extensions are
   the supported mechanism. Over-layering is reserved for ISVs with explicit
   contractual permission.
-- Always pass labels (`@File:Key`) for added fields' captions — never
+- Always pass labels (`@File:Key`) for added fields' captions â€” never
   hardcoded text (BP `BPErrorLabelIsText`).
 - After scaffolding, run `d365fo build` only on user request.

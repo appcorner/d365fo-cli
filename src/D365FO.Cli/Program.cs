@@ -1,4 +1,5 @@
 ﻿using D365FO.Cli.Commands.Agent;
+using D365FO.Cli.Commands.Analyze;
 using D365FO.Cli.Commands.Daemon;
 using D365FO.Cli.Commands.Find;
 using D365FO.Cli.Commands.Generate;
@@ -85,6 +86,7 @@ app.Configure(cfg =>
     {
         b.SetDescription("Heuristic suggestions over the index (no scaffolding).");
         b.AddCommand<SuggestEdtCommand>("edt").WithDescription("Suggest EDTs matching a field name.");
+        b.AddCommand<SuggestExtensionCommand>("extension").WithDescription("Recommend CoC / event-handler / AOT-extension strategy for a Class, Table, or Form.");
     });
 
     cfg.AddBranch("validate", b =>
@@ -141,6 +143,13 @@ app.Configure(cfg =>
         b.AddCommand<GeneratePrivilegeCommand>("privilege").WithDescription("Create a security privilege over an entry point.");
         b.AddCommand<GenerateDutyCommand>("duty").WithDescription("Create a security duty grouping privileges.");
         b.AddCommand<GenerateRoleCommand>("role").WithDescription("Create an AxSecurityRole or merge duties/privileges into an existing role.");
+        b.AddCommand<GenerateReportCommand>("report").WithDescription("Create an AxReport + SrsReportDataProviderBase skeleton (DP class).");
+    });
+
+    cfg.AddBranch("analyze", b =>
+    {
+        b.SetDescription("Cross-check workspace AOT XML against the index.");
+        b.AddCommand<AnalyzeCompletenessCommand>("completeness").WithDescription("Report broken EDT, label, security-role references in a project folder.");
     });
 
     cfg.AddBranch("test", b =>

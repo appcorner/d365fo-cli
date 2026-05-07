@@ -150,6 +150,11 @@ public sealed class TestRunCommand : Command<TestRunCommand.Settings>
 
 public sealed class BpCheckCommand : Command<BpCheckCommand.Settings>
 {
+    // xppbp help-text fragments that indicate the tool printed usage instead of results.
+    private static readonly Regex HelpTextPattern = new(
+        @"^usage:|BPCheck Tool|^xppbp\.exe|unrecognized|missing required|X\+\+ Best Practice Options",
+        RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.Compiled);
+
     public sealed class Settings : D365OutputSettings
     {
         [CommandOption("--tool <PATH>")]
@@ -157,6 +162,14 @@ public sealed class BpCheckCommand : Command<BpCheckCommand.Settings>
 
         [CommandOption("--model <NAME>")]
         public string? Model { get; init; }
+
+        [CommandOption("--packages <PATH>")]
+        [System.ComponentModel.Description("PackagesLocalDirectory (or FrameworkDirectory on UDE). Defaults to D365FO_PACKAGES_PATH.")]
+        public string? PackagesPath { get; init; }
+
+        [CommandOption("--metadata <PATH>")]
+        [System.ComponentModel.Description("Custom model metadata root (ModelStoreFolder on UDE). Defaults to --packages when not set.")]
+        public string? MetadataPath { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -165,13 +178,63 @@ public sealed class BpCheckCommand : Command<BpCheckCommand.Settings>
         var guard = WindowsGuard.Check("d365fo bp check");
         if (guard is not null) return RenderHelpers.Render(kind, guard);
 
-        var bp = settings.BpToolPath ?? "xppbp.exe";
-        var args = new List<string>();
-        if (!string.IsNullOrEmpty(settings.Model)) args.Add($"-model={settings.Model}");
-        var (exit, stdout, stderr, elapsed) = ProcessRunner.Run(bp, args);
+        var modelName = settings.Model;
+        if (string.IsNullOrEmpty(modelName))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                "MISSING_ARGUMENT", "--model <NAME> is required for bp check.",
+                "Example: d365fo bp check --model MyCustomModel"));
+
+        // Resolve paths. In UDE environments:
+        //   packagesRoot = FrameworkDirectory (where xppbp.exe lives, under Bin/)
+        //   metadataPath = ModelStoreFolder   (where custom source XML lives)
+        // In traditional environments both roles are served by packagesRoot.
+        var packagesRoot = settings.PackagesPath
+            ?? Environment.GetEnvironmentVariable("D365FO_PACKAGES_PATH")
+            ?? @"K:\AosService\PackagesLocalDirectory";
+        var metadataPath = settings.MetadataPath ?? packagesRoot;
+
+        var bp = settings.BpToolPath
+            ?? System.IO.Path.Combine(packagesRoot, "Bin", "xppbp.exe");
+
+        if (!System.IO.File.Exists(bp))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                "XPPBP_NOT_FOUND",
+                $"xppbp.exe not found at: {bp}",
+                "Set D365FO_PACKAGES_PATH (or --packages) to the FrameworkDirectory that contains Bin\\xppbp.exe."));
+
+        // Build argument list using modern -metadata: flag.
+        // Falls back to legacy -packagesroot: when the modern flag is not recognised.
+        List<string> BuildArgs(string metadataFlag) => new()
+        {
+            $"{metadataFlag}{metadataPath}",
+            $"-module:{modelName}",
+            $"-model:{modelName}",
+            "-all",
+        };
+
+        var (exit, stdout, stderr, elapsed) = ProcessRunner.Run(bp, BuildArgs("-metadata:"));
+        var combined = string.Join("\n", stdout, stderr).Trim();
+
+        // If the modern flag is not supported, fall back to the legacy -packagesroot: flag.
+        if (HelpTextPattern.IsMatch(combined) || string.IsNullOrWhiteSpace(combined))
+        {
+            (exit, stdout, stderr, elapsed) = ProcessRunner.Run(bp, BuildArgs("-packagesroot:"));
+        }
+
+        var tail = stdout.Split('\n').TakeLast(40).ToArray();
         return RenderHelpers.Render(kind, exit == 0
-            ? ToolResult<object>.Success(new { exitCode = exit, elapsedMs = (long)elapsed.TotalMilliseconds, tail = stdout.Split('\n').TakeLast(40).ToArray() })
-            : ToolResult<object>.Fail("BP_FAILED", $"Best practice check exited with {exit}.", string.Join('\n', stderr.Split('\n').TakeLast(5))));
+            ? ToolResult<object>.Success(new
+            {
+                exitCode = exit,
+                elapsedMs = (long)elapsed.TotalMilliseconds,
+                packagesRoot,
+                metadataPath,
+                model = modelName,
+                tail,
+            })
+            : ToolResult<object>.Fail("BP_FAILED",
+                $"Best practice check exited with {exit}.",
+                string.Join('\n', stderr.Split('\n').TakeLast(5))));
     }
 }
 

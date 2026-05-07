@@ -420,7 +420,13 @@ public sealed class MetadataExtractor
             var signature = ExtractSignatureLine(source);
             var returnType = InferReturnType(signature);
             var isStatic = signature.Contains(" static ", StringComparison.Ordinal);
-            methods.Add(new ExtractedMethod(mname!, signature, returnType, isStatic));
+            var hasDocComment     = source.Contains("/// <summary>", StringComparison.OrdinalIgnoreCase);
+            var hasTodayCall      = source.Contains("today()", StringComparison.OrdinalIgnoreCase);
+            var hasDoInsertUpdate = source.Contains("doInsert(", StringComparison.OrdinalIgnoreCase)
+                                 || source.Contains("doUpdate(", StringComparison.OrdinalIgnoreCase)
+                                 || source.Contains("doDelete(", StringComparison.OrdinalIgnoreCase);
+            methods.Add(new ExtractedMethod(mname!, signature, returnType, isStatic,
+                hasDocComment, hasTodayCall, hasDoInsertUpdate));
             sources.Add((mname!, source));
         }
         return (methods, sources);
@@ -486,7 +492,10 @@ public sealed class MetadataExtractor
         var dotIdx = nameNoExt.LastIndexOf('.');
         if (dotIdx < 0) yield break;
         var labelFile = nameNoExt.Substring(0, dotIdx);
-        var language = nameNoExt.Substring(dotIdx + 1);
+        // Normalize to BCP-47 canonical form: 'en-us' → 'en-US', 'es-mx' → 'es-MX'.
+        // Microsoft packages on Linux store locale dirs as lowercase; custom packages
+        // use mixed-case. Normalize on ingest so DB comparisons are consistent.
+        var language = NormalizeLocale(nameNoExt.Substring(dotIdx + 1));
         if (!LangPasses(langs, language)) yield break;
 
         foreach (var entry in ReadLabelTxt(txt, labelFile, language))
@@ -511,7 +520,7 @@ public sealed class MetadataExtractor
 
         foreach (var loc in Children(doc.Root, "Labels"))
         {
-            var language = Local(loc, "Language") ?? "en-us";
+            var language = NormalizeLocale(Local(loc, "Language") ?? "en-us");
             if (!LangPasses(langs, language)) continue;
             foreach (var entry in loc.Descendants().Where(x => x.Name.LocalName == "AxLabel"))
             {
@@ -547,7 +556,7 @@ public sealed class MetadataExtractor
         {
             foreach (var loc in Children(inlineRoot, "Labels"))
             {
-                var language = Local(loc, "Language") ?? "en-us";
+                var language = NormalizeLocale(Local(loc, "Language") ?? "en-us");
                 if (!LangPasses(langs, language)) continue;
                 var entries = loc.Descendants().Where(x => x.Name.LocalName == "AxLabel");
                 foreach (var entry in entries)
@@ -570,7 +579,7 @@ public sealed class MetadataExtractor
             var dotIdx = nameNoExt.LastIndexOf('.');
             if (dotIdx < 0) continue;
             var labelFile = nameNoExt.Substring(0, dotIdx);
-            var language = nameNoExt.Substring(dotIdx + 1);
+            var language = NormalizeLocale(nameNoExt.Substring(dotIdx + 1));
             if (!LangPasses(langs, language)) continue;
 
             // Only index labels that belong to the manifest we're reading.
@@ -582,6 +591,20 @@ public sealed class MetadataExtractor
             foreach (var entry in ReadLabelTxt(txt, labelFile, language))
                 yield return entry;
         }
+    }
+
+    /// <summary>
+    /// Normalize a locale string to BCP-47 canonical form.
+    /// 'en-us' → 'en-US', 'es-mx' → 'es-MX', 'zh-hans' → 'zh-Hans'.
+    /// Only the last subtag is uppercased; single-subtag locales are lowercased.
+    /// </summary>
+    private static string NormalizeLocale(string locale)
+    {
+        if (string.IsNullOrEmpty(locale)) return locale;
+        var parts = locale.Split('-');
+        for (int i = 0; i < parts.Length; i++)
+            parts[i] = i == 0 ? parts[i].ToLowerInvariant() : parts[i].ToUpperInvariant();
+        return string.Join('-', parts);
     }
 
     private static bool LangPasses(IReadOnlyCollection<string>? langs, string language) =>

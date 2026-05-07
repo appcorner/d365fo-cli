@@ -1,0 +1,46 @@
+<AxClass>
+  <Name>FmVehicleService</Name>
+  <SourceCode>
+    <Declaration><![CDATA[
+/// <summary>
+/// Service class for fleet vehicle operations.
+/// </summary>
+public class FmVehicleService
+{
+    FmVehicle vehicle;
+}
+]]></Declaration>
+    <Methods>
+      <Method>
+        <Name>new</Name>
+        <Source><![CDATA[
+    public void new()
+    {
+        super();
+    }
+]]></Source>
+      </Method>
+      <Method>
+        <Name>run</Name>
+        <Source><![CDATA[
+    public void run()
+    {
+        FmVehicle v;
+        select firstOnly v
+            where v.VIN != '';
+        Info(strFmt("@Fleet:Found", v.RecId));
+    }
+]]></Source>
+      </Method>
+      <Method>
+        <Name>construct</Name>
+        <Source><![CDATA[
+    public static FmVehicleService construct()
+    {
+        return new FmVehicleService();
+    }
+]]></Source>
+      </Method>
+    </Methods>
+  </SourceCode>
+</AxClass>

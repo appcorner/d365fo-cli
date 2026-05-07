@@ -107,9 +107,16 @@ d365fo generate table FmVehicle \
 # In-process heuristics — fast, runs anywhere, useful for CI:
 d365fo lint --output sarif > lint.sarif
 
+# Run specific method-flag categories (detected at index-extract time):
+d365fo lint --category today-usage          # BPUpgradeCodeToday: today() calls
+d365fo lint --category do-insert-update     # doInsert/doUpdate/doDelete usage
+d365fo lint --category doc-comment-missing  # BPXmlDocNoDocumentationComments
+
 # Full BP — only on the Windows VM, only on user request:
 d365fo bp check --output json
 ```
+
+Six categories are now available: `table-no-index`, `ext-named-not-attributed`, `string-without-edt`, `today-usage`, `do-insert-update`, `doc-comment-missing`. The method-flag categories are populated at extract time by scanning `<Source>` text — no full body is stored. Re-run `d365fo index refresh` after editing source before linting.
 
 **Never** auto-run `bp check`. It blocks the user (slow, Windows-only). Say *"Changes scaffolded. Run `d365fo bp check` when you're ready."*
 

@@ -1,0 +1,33 @@
+<AxTable>
+  <Name>FmVehicle</Name>
+  <Label>@Fleet:Vehicle</Label>
+  <Fields>
+    <AxTableField xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="AxTableFieldString">
+      <Name>VIN</Name>
+      <ExtendedDataType>VinEdt</ExtendedDataType>
+      <Mandatory>Yes</Mandatory>
+      <StringSize>17</StringSize>
+    </AxTableField>
+    <AxTableField xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="AxTableFieldString">
+      <Name>Make</Name>
+      <ExtendedDataType>Name</ExtendedDataType>
+    </AxTableField>
+    <AxTableField xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="AxTableFieldInt">
+      <Name>Year</Name>
+    </AxTableField>
+  </Fields>
+  <FullTextIndexes />
+  <Indexes>
+    <AxTableIndex>
+      <Name>VINIdx</Name>
+      <AlternateKey>Yes</AlternateKey>
+      <Fields>
+        <AxTableIndexField>
+          <DataField>VIN</DataField>
+        </AxTableIndexField>
+      </Fields>
+    </AxTableIndex>
+  </Indexes>
+  <Relations />
+  <StateMachines />
+</AxTable>

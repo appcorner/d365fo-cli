@@ -56,7 +56,7 @@ Every tool returns the same shape:
 ## The local index (SQLite)
 
 - Single file at `$D365FO_INDEX_DB` (default: `$LOCALAPPDATA/d365fo-cli/d365fo-index.sqlite`).
-- Schema **v7**, defined in [`src/D365FO.Core/Index/Schema.sql`](../src/D365FO.Core/Index/Schema.sql). v6 added a `LabelFts` FTS5 virtual table (content-linked to `Labels` via `rowid=LabelId`) plus INSERT/UPDATE/DELETE triggers that keep the full-text index in sync; `EnsureSchema` issues a one-time `LabelFts('rebuild')` on migration and gracefully degrades if the SQLite build lacks FTS5. v7 adds `Models.LastExtractedUtc` + `Models.SourceFingerprint` (per-model content fingerprint = `"{xmlFileCount}:{newestMtimeTicks}"`, used by `index refresh` for O(k) change detection) and an append-only `ExtractionRuns` telemetry table consumed by `d365fo index history`.
+- Schema **v9**, defined in [`src/D365FO.Core/Index/Schema.sql`](../src/D365FO.Core/Index/Schema.sql). v6 added a `LabelFts` FTS5 virtual table; v7 adds `Models.LastExtractedUtc` + `Models.SourceFingerprint` (per-model content fingerprint) and an append-only `ExtractionRuns` telemetry table; v8 adds `Forms.Pattern`, `Forms.PatternVersion`, `Forms.Style`, `Forms.TitleDataSource` and `FormDataSources.OrderIndex`/`JoinSource`; v9 adds `HasDocComment`, `HasTodayCall`, `HasDoInsertOrUpdate` boolean flags to both `Methods` (class) and `TableMethods` — populated at extract time by scanning `<Source>` CDATA, used by the `today-usage`, `do-insert-update`, and `doc-comment-missing` lint categories.
 - Version tracked in `PRAGMA user_version`; migrations applied automatically on first connection via `MetadataRepository.EnsureSchema`.
 - `MetadataRepository` is stateless — every call opens and closes its own connection, so it works identically in a short-lived CLI process, a long-lived MCP server, or a daemon.
 - SQLite booleans are stored as `INTEGER`; `SqliteBoolHandler` teaches Dapper the conversion once at static init.
@@ -123,6 +123,15 @@ One request per line, UTF-8:
 | `D365FO_BRIDGE_PATH` | Overrides the bridge exe location. |
 
 The bridge is Windows-only and must ship next to a live VM. Non-Windows developers stay on the SQLite-index path automatically.
+
+## Daemon
+
+`D365FO.Cli.Commands.Daemon.DaemonStartCommand` starts a long-lived process that:
+
+1. **Serves JSON-RPC** over a Windows named pipe (`\\.\pipe\d365fo-cli`) or Unix socket (`$XDG_RUNTIME_DIR/d365fo-cli.sock`). Each connection gets its own `StdioDispatcher` instance sharing one `MetadataRepository` — the warm SQLite connection pool is the key latency benefit.
+2. **Watches for XML changes** via `FileSystemWatcher` over `D365FO_PACKAGES_PATH` (or `--packages`). On any `*.xml` change, a per-model debounce timer (default 3 s, `--watch-debounce <MS>`) fires and calls `IndexExtractCommand.ExtractCore` for the affected model. A JSON notification is emitted to stderr on completion. Pass `--no-watch` to disable.
+
+PID is written to `$LOCALAPPDATA/d365fo-cli/daemon.pid` (Windows) or `$XDG_RUNTIME_DIR/d365fo-cli.pid`; `daemon stop` reads it to send SIGTERM / `TerminateProcess`.
 
 ## MCP coexistence
 

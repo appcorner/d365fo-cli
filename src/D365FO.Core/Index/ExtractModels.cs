@@ -60,7 +60,8 @@ public sealed record ExtractedClass(string Name, string? Extends, bool IsAbstrac
 {
     public IReadOnlyList<ExtractedClassAttribute> Attributes { get; init; } = Array.Empty<ExtractedClassAttribute>();
 }
-public sealed record ExtractedMethod(string Name, string? Signature, string? ReturnType, bool IsStatic);
+public sealed record ExtractedMethod(string Name, string? Signature, string? ReturnType, bool IsStatic,
+    bool HasDocComment = false, bool HasTodayCall = false, bool HasDoInsertOrUpdate = false);
 public sealed record ExtractedClassAttribute(string? MethodName, string AttributeName, string RawArgs);
 public sealed record ExtractedEventSubscriber(
     string SubscriberClass,

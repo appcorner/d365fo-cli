@@ -1,4 +1,4 @@
----
+﻿---
 name: coc-extension-authoring
 description: Author a Chain-of-Command extension in D365FO without duplicating existing wrappers. Use when the user asks to "wrap a method", "add a CoC", or "modify behavior of standard method".
 applies_when: User intent mentions Chain-of-Command, CoC, method wrapping, next() pattern, or non-intrusive extension.
@@ -14,24 +14,24 @@ applies_when: User intent mentions Chain-of-Command, CoC, method wrapping, next(
 d365fo get class <TargetClass> --output json
 d365fo read class <TargetClass> --method <method> --declaration
 
-# 2) Discover existing CoC wrappers — MUST be empty or coordinated
+# 2) Discover existing CoC wrappers â€” MUST be empty or coordinated
 d365fo find coc <TargetClass>::<method> --output json
 ```
 
 If `count > 0`, enumerate `items[*].extensionClass` to the user and stop before writing another wrapper. Stacking duplicates risks ordering bugs.
 
-## 🚨 NEVER copy default parameter values into the wrapper
+## ðŸš¨ NEVER copy default parameter values into the wrapper
 
-The most common bug — Learn-confirmed:
+The most common bug â€” Learn-confirmed:
 
 ```xpp
 // Base method
 class Person
 {
-    public void salute(str message = "Hi") { … }
+    public void salute(str message = "Hi") { â€¦ }
 }
 
-// ✅ CORRECT — wrapper omits the default value
+// âœ… CORRECT â€” wrapper omits the default value
 [ExtensionOf(classStr(Person))]
 final class APerson_Extension
 {
@@ -41,25 +41,25 @@ final class APerson_Extension
     }
 }
 
-// ❌ WRONG — copying the default does not compile
-public void salute(str message = "Hi")     // ← forbidden
+// âŒ WRONG â€” copying the default does not compile
+public void salute(str message = "Hi")     // â† forbidden
 ```
 
 ## `next` placement rules
 
-- **Wrapper must call `next` unconditionally** — exception: `[Replaceable]` methods may conditionally break the chain.
-- **`next` must sit at first-level statement scope** — NOT inside `if`, `while`, `for`, `do-while`, NOT after `return`, NOT inside a logical expression.
+- **Wrapper must call `next` unconditionally** â€” exception: `[Replaceable]` methods may conditionally break the chain.
+- **`next` must sit at first-level statement scope** â€” NOT inside `if`, `while`, `for`, `do-while`, NOT after `return`, NOT inside a logical expression.
 - Platform Update 21+: `next` is permitted inside `try` / `catch` / `finally` (the only nested contexts allowed).
 
 ```xpp
-// ✅ CORRECT
+// âœ… CORRECT
 public void doStuff()
 {
     next doStuff();         // first-level
     this.afterStuff();
 }
 
-// ❌ WRONG — next inside `if`
+// âŒ WRONG â€” next inside `if`
 public void doStuff()
 {
     if (this.shouldRun())
@@ -69,18 +69,18 @@ public void doStuff()
 
 ## Signature & class shape
 
-- Signature otherwise matches the base **exactly** — same return type, parameter types / order, same `static` modifier. Run `d365fo read class <Target> --method <m> --declaration` and copy.
+- Signature otherwise matches the base **exactly** â€” same return type, parameter types / order, same `static` modifier. Run `d365fo read class <Target> --method <m> --declaration` and copy.
 - Static methods: repeat `static` on the wrapper. Forms cannot be wrapped statically.
 - **Cannot wrap constructors.** A new no-arg method on an extension class becomes the *extension class's* own constructor (must be `public`).
 - Class shape: `[ExtensionOf(classStr|tableStr|formStr|formDataSourceStr|formDataFieldStr|formControlStr(...))] final class <Target>_<Suffix>`. Class is `final`; name ends with `_Extension` (or descriptive suffix).
 - **`[Hookable(false)]`** on a base method blocks CoC and pre/post handlers. Cannot wrap.
 - **`[Wrappable(false)]`** blocks wrapping but still allows pre/post handlers. `final` methods need explicit `[Wrappable(true)]` to be wrappable.
-- Form-nested wrapping: `formdatasourcestr`, `formdatafieldstr`, `formControlStr`. **Cannot add NEW methods** via CoC on these — only wrap methods that already exist.
+- Form-nested wrapping: `formdatasourcestr`, `formdatafieldstr`, `formControlStr`. **Cannot add NEW methods** via CoC on these â€” only wrap methods that already exist.
 - **Visibility:** wrappers can read/call **protected** members of the augmented class (Platform Update 9+). Cannot reach `private`.
 
 ## Authoring checklist
 
-- [ ] Pre-flight passes — class + method exist, no duplicate wrapper, signature copied verbatim.
+- [ ] Pre-flight passes â€” class + method exist, no duplicate wrapper, signature copied verbatim.
 - [ ] `[ExtensionOf(...)]` decorator present.
 - [ ] `final class <Target>_Extension`.
 - [ ] Default parameter values **omitted** from the wrapper signature.
@@ -110,4 +110,4 @@ d365fo bp check --output json    # only on user request
 - Never put `next` inside `if` / `while` / `for` / `do-while` / boolean expressions (PU21+: `try` / `catch` / `finally` only).
 - Never remove `next` on a non-`[Replaceable]` method.
 - Never wrap a constructor.
-- Never hardcode labels — `d365fo search label` first.
+- Never hardcode labels â€” `d365fo search label` first.

@@ -343,6 +343,276 @@ public static class XppScaffolder
         return changed;
     }
 
+    /// <summary>
+    /// Scaffolds an <c>AxReport</c> XML with full dataset / tablix / parameter structure.
+    /// Supports multiple datasets (each bound to a DP class), tablix column definitions
+    /// derived from <paramref name="spec"/>.<c>Fields</c> / <c>Datasets[i].Fields</c>,
+    /// and <c>AxReportParameter</c> elements for report-dialog filters.
+    /// Mirrors upstream MCP <c>generate_smart_report</c>. Pair with
+    /// <see cref="ReportDp"/> and (when parameters exist) <see cref="ReportContract"/>.
+    /// </summary>
+    public static XDocument Report(ReportSpec spec)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+
+        var datasets = spec.EffectiveDatasets;
+
+        // --- <ReportParameters> (optional) ---
+        XElement? parametersEl = null;
+        if (spec.Parameters is { Count: > 0 })
+        {
+            parametersEl = new XElement("ReportParameters",
+                spec.Parameters.Select(p => new XElement("AxReportParameter",
+                    new XElement("Name",       p.Name),
+                    new XElement("AllowBlank", p.AllowBlank ? "Yes" : "No"),
+                    new XElement("DataType",   p.DataType),
+                    new XElement("Prompt",     p.Prompt     ? "Yes" : "No"))));
+        }
+
+        // --- <Datasets> ---
+        var datasetsEl = new XElement("Datasets",
+            datasets.Select(ds => new XElement("AxReportDataset",
+                new XElement("Name",           ds.Name),
+                new XElement("DataProvider",   ds.DpClass),
+                new XElement("QueryType",      "DataProvider"),
+                new XElement("DynamicFilters", "Yes"))));
+
+        // --- <Designs> with AutoDesignSpecs + one tablix per dataset ---
+        var autoNodes = datasets.Select((ds, i) => new XElement("AxReportAutoDesignNode",
+            new XElement("Name",    i == 0 ? "AutoDesign" : $"AutoDesign{i + 1}"),
+            new XElement("DataSet", ds.Name),
+            new XElement("ReportAutoDesignItems",
+                new XElement("AxReportAutoDesignDataSet",
+                    new XElement("Name",       $"AutoDesignDataSet{i + 1}"),
+                    new XElement("DataSet",    ds.Name),
+                    new XElement("AutoFields", "Yes")))));
+
+        var tablixItems = datasets.Select((ds, i) => BuildTablix(ds.Name, ds.Fields, i + 1));
+
+        var designEl = new XElement("Designs",
+            new XElement("AxReportDesign",
+                new XElement("Name", "Report"),
+                string.IsNullOrEmpty(spec.Caption) ? null : new XElement("Caption", spec.Caption),
+                new XElement("AutoDesignSpecs", autoNodes),
+                new XElement("ReportDesignItems", tablixItems)));
+
+        return new XDocument(
+            new XElement("AxReport",
+                new XElement("Name", spec.Name),
+                parametersEl,
+                datasetsEl,
+                designEl));
+    }
+
+    /// <summary>
+    /// Builds one <c>AxReportTablix</c> element. When <paramref name="fields"/> is
+    /// provided, emits a column hierarchy, a bold header row, and a detail data row.
+    /// When empty, produces a minimal tablix shell for manual completion.
+    /// </summary>
+    private static XElement BuildTablix(string datasetName, IReadOnlyList<string>? fields, int index)
+    {
+        var name = $"Tablix{index}";
+
+        if (fields is not { Count: > 0 })
+        {
+            // Minimal shell — developer fills in columns manually.
+            return new XElement("AxReportTablix",
+                new XElement("Name",        name),
+                new XElement("DataSetName", datasetName),
+                new XElement("TablixBody",
+                    new XElement("TablixColumns"),
+                    new XElement("TablixRows")),
+                new XElement("TablixColumnHierarchy",
+                    new XElement("TablixMembers")),
+                new XElement("TablixRowHierarchy",
+                    new XElement("TablixMembers",
+                        new XElement("TablixMember",
+                            new XElement("Group", new XAttribute("Name", "Detail"))))));
+        }
+
+        // Column width definitions (2 in per column).
+        var columnEls = fields.Select(_ =>
+            new XElement("TablixColumn", new XElement("Width", "2in")));
+
+        // Header row — one bold textbox per field.
+        var headerCells = fields.Select(f =>
+            new XElement("TablixCell",
+                new XElement("CellContents",
+                    new XElement("Textbox", new XAttribute("Name", $"{name}_{f}_Header"),
+                        new XElement("Value", f),
+                        new XElement("Style",
+                            new XElement("FontWeight", "Bold"),
+                            new XElement("BackgroundColor", "#e0e0e0"))))));
+
+        // Detail row — one =Fields!<Field>.Value textbox per field.
+        var dataCells = fields.Select(f =>
+            new XElement("TablixCell",
+                new XElement("CellContents",
+                    new XElement("Textbox", new XAttribute("Name", $"{name}_{f}"),
+                        new XElement("Value", $"=Fields!{f}.Value")))));
+
+        // Column hierarchy: one static member per column.
+        var colMembers = fields.Select(_ => new XElement("TablixMember"));
+
+        return new XElement("AxReportTablix",
+            new XElement("Name",        name),
+            new XElement("DataSetName", datasetName),
+            new XElement("TablixBody",
+                new XElement("TablixColumns", columnEls),
+                new XElement("TablixRows",
+                    new XElement("TablixRow",
+                        new XElement("Height", "0.25in"),
+                        new XElement("TablixCells", headerCells)),
+                    new XElement("TablixRow",
+                        new XElement("Height", "0.25in"),
+                        new XElement("TablixCells", dataCells)))),
+            new XElement("TablixColumnHierarchy",
+                new XElement("TablixMembers", colMembers)),
+            new XElement("TablixRowHierarchy",
+                new XElement("TablixMembers",
+                    new XElement("TablixMember"), // static header row
+                    new XElement("TablixMember",  // detail data row
+                        new XElement("Group", new XAttribute("Name", "Detail"))))));
+    }
+
+    /// <summary>
+    /// Scaffolds an <c>AxClass</c> implementing <c>SrsReportDataProviderBase</c>
+    /// with a <c>[SRSReportDataSet]</c> getter per dataset and a
+    /// <c>processReport()</c> override with a <c>QueryRun</c> skeleton.
+    /// When <see cref="ReportSpec.Parameters"/> is non-empty, the declaration
+    /// includes a typed cast to the companion contract. Companion: <see cref="ReportContract"/>.
+    /// </summary>
+    public static XDocument ReportDp(ReportSpec spec)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+        var dp       = spec.EffectiveDpClass;
+        var tmp      = spec.EffectiveTmpTable;
+        var datasets = spec.EffectiveDatasets;
+
+        // Member fields for every dataset's temp table.
+        var memberDecls = string.Join("\n", datasets.Select(ds =>
+            $"    {ds.DpClass + "Tmp"} {char.ToLower(ds.DpClass[0]) + ds.DpClass[1..]}Tmp;"));
+
+        var declaration =
+            $"[SRSReportDataContract(\"{spec.ContractClass}\")]\n" +
+            $"class {dp} extends SrsReportDataProviderBase\n" +
+            "{\n" +
+            memberDecls + "\n" +
+            "}\n";
+
+        // Build one getter method per dataset.
+        var getterMethods = datasets.Select((ds, i) =>
+        {
+            var dsTmp    = ds.DpClass + "Tmp";
+            var dsField  = char.ToLower(ds.DpClass[0]) + ds.DpClass[1..] + "Tmp";
+            var dsGetter = "get" + dsTmp;
+            var src =
+                $"[SRSReportDataSet(\"{ds.Name}\")]\n" +
+                $"public {dsTmp} {dsGetter}()\n" +
+                "{\n" +
+                $"    select {dsField};\n" +
+                $"    return {dsField};\n" +
+                "}\n";
+            return new XElement("Method",
+                new XElement("Name",   dsGetter),
+                new XElement("Source", src));
+        }).ToList();
+
+        // processReport — contract cast only when parameters are defined.
+        var contractLine = spec.Parameters is { Count: > 0 }
+            ? $"\n    {spec.ContractClass} contract = this.parmDataContract() as {spec.ContractClass};\n"
+            : "\n";
+
+        var processReportSrc =
+            "public void processReport()\n" +
+            "{\n" +
+            contractLine +
+            "    QueryRun qr = new QueryRun(this.parmQuery());\n" +
+            "\n" +
+            "    ttsbegin;\n" +
+            "    while (qr.next())\n" +
+            "    {\n" +
+            "        // Retrieve the primary source buffer:\n" +
+            "        // MyTable src = qr.get(tableNum(MyTable));\n" +
+            "\n" +
+            "        // Populate the staging table and insert:\n" +
+            "        // " + (datasets[0].DpClass[0] | 0x20) + datasets[0].DpClass[1..] + "Tmp.Field1 = src.Field1;\n" +
+            "        // " + (datasets[0].DpClass[0] | 0x20) + datasets[0].DpClass[1..] + "Tmp.insert();\n" +
+            "    }\n" +
+            "    ttscommit;\n" +
+            "}\n";
+
+        getterMethods.Add(new XElement("Method",
+            new XElement("Name",   "processReport"),
+            new XElement("Source", processReportSrc)));
+
+        return new XDocument(
+            new XElement("AxClass",
+                new XElement("Name",    dp),
+                new XElement("Extends", "SrsReportDataProviderBase"),
+                new XElement("SourceCode",
+                    new XElement("Declaration", declaration),
+                    new XElement("Methods", getterMethods))));
+    }
+
+    /// <summary>
+    /// Scaffolds the companion <c>SrsReportDataContractBase</c> class for
+    /// <see cref="ReportDp"/>. Emits one <c>parm*()</c> accessor per entry in
+    /// <see cref="ReportSpec.Parameters"/>. Returns <see langword="null"/> when the
+    /// spec has no parameters (no contract class needed).
+    /// </summary>
+    public static XDocument? ReportContract(ReportSpec spec)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+        if (spec.Parameters is not { Count: > 0 }) return null;
+
+        var contractName = spec.ContractClass;
+
+        // Map SSRS DataType to X++ primitive.
+        static string XppType(string dt) => dt switch
+        {
+            "Integer"              => "int",
+            "DateTime"             => "utcDateTime",
+            "Boolean"              => "boolean",
+            "Decimal" or "Float"   => "real",
+            _                      => "str",
+        };
+
+        var memberDecls = string.Join("\n",
+            spec.Parameters.Select(p => $"    {XppType(p.DataType)} {char.ToLower(p.Name[0])}{p.Name[1..]};"));
+
+        var declaration =
+            "[DataContractAttribute]\n" +
+            $"class {contractName} extends SrsReportDataContractBase\n" +
+            "{\n" +
+            memberDecls + "\n" +
+            "}\n";
+
+        var parmMethods = spec.Parameters.Select(p =>
+        {
+            var member  = char.ToLower(p.Name[0]) + p.Name[1..];
+            var xppType = XppType(p.DataType);
+            var src =
+                $"[DataMemberAttribute('{p.Name}')]\n" +
+                $"public {xppType} parm{p.Name}({xppType} _{member} = {member})\n" +
+                "{\n" +
+                $"    {member} = _{member};\n" +
+                $"    return {member};\n" +
+                "}\n";
+            return new XElement("Method",
+                new XElement("Name",   $"parm{p.Name}"),
+                new XElement("Source", src));
+        }).ToList();
+
+        return new XDocument(
+            new XElement("AxClass",
+                new XElement("Name",    contractName),
+                new XElement("Extends", "SrsReportDataContractBase"),
+                new XElement("SourceCode",
+                    new XElement("Declaration", declaration),
+                    new XElement("Methods", parmMethods))));
+    }
+
     private static bool AppendRefs(XElement root, string containerName, string itemName, IEnumerable<string>? values)
     {
         var items = (values ?? Enumerable.Empty<string>())
@@ -376,6 +646,52 @@ public static class XppScaffolder
 }
 
 public sealed record EntityFieldSpec(string Name, string? DataField, bool IsMandatory);
+
+/// <summary>One dataset within an <c>AxReport</c>, bound to a DP class.</summary>
+public sealed record ReportDatasetSpec(
+    string Name,
+    string DpClass,
+    IReadOnlyList<string>? Fields = null);
+
+/// <summary>One SSRS report parameter exposed on the report dialog.</summary>
+public sealed record ReportParameterSpec(
+    string Name,
+    string DataType = "String",
+    bool AllowBlank = true,
+    bool Prompt = true);
+
+/// <summary>
+/// Parameters for <see cref="XppScaffolder.Report"/>, <see cref="XppScaffolder.ReportDp"/>,
+/// and <see cref="XppScaffolder.ReportContract"/>.
+/// Derived effective names are computed by the <c>Effective*</c> properties when the caller
+/// does not supply an explicit override.
+/// </summary>
+public sealed record ReportSpec(
+    string Name,
+    string? DpClass = null,
+    string? TmpTable = null,
+    string? DatasetName = null,
+    string? Caption = null,
+    IReadOnlyList<ReportDatasetSpec>? Datasets = null,
+    IReadOnlyList<string>? Fields = null,
+    IReadOnlyList<ReportParameterSpec>? Parameters = null)
+{
+    public string EffectiveDpClass  => string.IsNullOrWhiteSpace(DpClass)     ? Name + "DP"  : DpClass!;
+    public string EffectiveTmpTable => string.IsNullOrWhiteSpace(TmpTable)    ? Name + "Tmp" : TmpTable!;
+    public string EffectiveDataset  => string.IsNullOrWhiteSpace(DatasetName) ? Name + "DS"  : DatasetName!;
+
+    /// <summary>
+    /// Effective dataset list: either caller-supplied multi-dataset list, or the single
+    /// primary dataset derived from <see cref="EffectiveDataset"/> / <see cref="EffectiveDpClass"/>.
+    /// </summary>
+    public IReadOnlyList<ReportDatasetSpec> EffectiveDatasets =>
+        (Datasets is { Count: > 0 })
+            ? Datasets
+            : [new ReportDatasetSpec(EffectiveDataset, EffectiveDpClass, Fields)];
+
+    /// <summary>Name of the companion DataContract class.</summary>
+    public string ContractClass => EffectiveDpClass + "Contract";
+}
 
 public sealed record TableFieldSpec(string Name, string? Edt, string? Label, bool Mandatory);
 
