@@ -28,9 +28,7 @@ Every AI assistant hallucinates D365 field names, method signatures, and label I
 
 ## Solution Architecture
 
-![Solution Architecture](docs/img/architecture.png)
-
-> **Note:** Save the attached architecture diagram to `docs/img/architecture.png` to display this image.
+![Solution Architecture](docs/img/solution-architecture-diagram.png)
 
 The CLI sits between your AI agent and the D365FO metadata layer. It exposes a single `d365fo` binary that queries a local SQLite index (or a live metadata bridge on Windows VMs) and returns stable JSON envelopes your agent can parse in one tool call.
 
