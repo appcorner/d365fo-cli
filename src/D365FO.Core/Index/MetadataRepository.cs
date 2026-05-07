@@ -14,7 +14,7 @@ namespace D365FO.Core.Index;
 public sealed class MetadataRepository
 {
     /// <summary>Current schema version tracked in PRAGMA user_version.</summary>
-    public const int CurrentSchemaVersion = 8;
+    public const int CurrentSchemaVersion = 9;
 
     private static readonly Lazy<string> SchemaSql = new(LoadEmbeddedSchema);
 
@@ -86,6 +86,22 @@ public sealed class MetadataRepository
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             if (!dsCols.Contains("OrderIndex")) conn.Execute("ALTER TABLE FormDataSources ADD COLUMN OrderIndex INTEGER NOT NULL DEFAULT 0");
             if (!dsCols.Contains("JoinSource")) conn.Execute("ALTER TABLE FormDataSources ADD COLUMN JoinSource TEXT");
+        }
+        if (current < 9)
+        {
+            // v9: Lint-flag columns on Methods / TableMethods. Populated during
+            // extract by scanning <Source> text — no full body storage.
+            var methodCols = conn.Query<string>("SELECT name FROM pragma_table_info('Methods')")
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (!methodCols.Contains("HasDocComment"))    conn.Execute("ALTER TABLE Methods ADD COLUMN HasDocComment    INTEGER NOT NULL DEFAULT 0");
+            if (!methodCols.Contains("HasTodayCall"))     conn.Execute("ALTER TABLE Methods ADD COLUMN HasTodayCall     INTEGER NOT NULL DEFAULT 0");
+            if (!methodCols.Contains("HasDoInsertOrUpdate")) conn.Execute("ALTER TABLE Methods ADD COLUMN HasDoInsertOrUpdate INTEGER NOT NULL DEFAULT 0");
+
+            var tmCols = conn.Query<string>("SELECT name FROM pragma_table_info('TableMethods')")
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (!tmCols.Contains("HasDocComment"))    conn.Execute("ALTER TABLE TableMethods ADD COLUMN HasDocComment    INTEGER NOT NULL DEFAULT 0");
+            if (!tmCols.Contains("HasTodayCall"))     conn.Execute("ALTER TABLE TableMethods ADD COLUMN HasTodayCall     INTEGER NOT NULL DEFAULT 0");
+            if (!tmCols.Contains("HasDoInsertOrUpdate")) conn.Execute("ALTER TABLE TableMethods ADD COLUMN HasDoInsertOrUpdate INTEGER NOT NULL DEFAULT 0");
         }
         conn.Execute($"PRAGMA user_version = {CurrentSchemaVersion}");
         conn.Execute(
@@ -502,6 +518,85 @@ public sealed class MetadataRepository
             .Select(r => new LintHit((string)r.TargetName, (string)r.Model, (string?)r.Detail)).ToList();
     }
 
+    /// <summary>
+    /// Returns methods (class or table) that call <c>today()</c>
+    /// — should use <c>DateTimeUtil::getToday(...)</c> instead (BP: BPUpgradeCodeToday).
+    /// </summary>
+    public IReadOnlyList<LintHit> FindTodayCallMethods(bool onlyCustomModels = true)
+    {
+        using var conn = Open();
+        // Union class methods and table methods.
+        var sql = @"
+            SELECT (c.Name || '::' || mt.Name) AS TargetName, m.Name AS Model, 'today()' AS Detail
+            FROM Methods mt
+            JOIN Classes c ON c.ClassId = mt.ClassId
+            JOIN Models m ON m.ModelId = c.ModelId
+            WHERE mt.HasTodayCall = 1
+              AND (@custom = 0 OR m.IsCustom = 1)
+            UNION ALL
+            SELECT (t.Name || '::' || mt.Name) AS TargetName, m.Name AS Model, 'today()' AS Detail
+            FROM TableMethods mt
+            JOIN Tables t ON t.TableId = mt.TableId
+            JOIN Models m ON m.ModelId = t.ModelId
+            WHERE mt.HasTodayCall = 1
+              AND (@custom = 0 OR m.IsCustom = 1)
+            ORDER BY TargetName";
+        return conn.Query(sql, new { custom = onlyCustomModels ? 1 : 0 })
+            .Select(r => new LintHit((string)r.TargetName, (string)r.Model, (string?)r.Detail)).ToList();
+    }
+
+    /// <summary>
+    /// Returns methods that call <c>doInsert()</c>, <c>doUpdate()</c>, or <c>doDelete()</c>
+    /// (bypasses table overrides — reserved for migration scripts).
+    /// </summary>
+    public IReadOnlyList<LintHit> FindDoInsertOrUpdateMethods(bool onlyCustomModels = true)
+    {
+        using var conn = Open();
+        var sql = @"
+            SELECT (c.Name || '::' || mt.Name) AS TargetName, m.Name AS Model, 'doInsert/doUpdate/doDelete' AS Detail
+            FROM Methods mt
+            JOIN Classes c ON c.ClassId = mt.ClassId
+            JOIN Models m ON m.ModelId = c.ModelId
+            WHERE mt.HasDoInsertOrUpdate = 1
+              AND (@custom = 0 OR m.IsCustom = 1)
+            UNION ALL
+            SELECT (t.Name || '::' || mt.Name) AS TargetName, m.Name AS Model, 'doInsert/doUpdate/doDelete' AS Detail
+            FROM TableMethods mt
+            JOIN Tables t ON t.TableId = mt.TableId
+            JOIN Models m ON m.ModelId = t.ModelId
+            WHERE mt.HasDoInsertOrUpdate = 1
+              AND (@custom = 0 OR m.IsCustom = 1)
+            ORDER BY TargetName";
+        return conn.Query(sql, new { custom = onlyCustomModels ? 1 : 0 })
+            .Select(r => new LintHit((string)r.TargetName, (string)r.Model, (string?)r.Detail)).ToList();
+    }
+
+    /// <summary>
+    /// Returns public/protected methods that lack a <c>/// &lt;summary&gt;</c> doc comment
+    /// (BP: BPXmlDocNoDocumentationComments).
+    /// </summary>
+    public IReadOnlyList<LintHit> FindMissingDocCommentMethods(bool onlyCustomModels = true)
+    {
+        using var conn = Open();
+        var sql = @"
+            SELECT (c.Name || '::' || mt.Name) AS TargetName, m.Name AS Model, 'missing doc-comment' AS Detail
+            FROM Methods mt
+            JOIN Classes c ON c.ClassId = mt.ClassId
+            JOIN Models m ON m.ModelId = c.ModelId
+            WHERE mt.HasDocComment = 0
+              AND (@custom = 0 OR m.IsCustom = 1)
+            UNION ALL
+            SELECT (t.Name || '::' || mt.Name) AS TargetName, m.Name AS Model, 'missing doc-comment' AS Detail
+            FROM TableMethods mt
+            JOIN Tables t ON t.TableId = mt.TableId
+            JOIN Models m ON m.ModelId = t.ModelId
+            WHERE mt.HasDocComment = 0
+              AND (@custom = 0 OR m.IsCustom = 1)
+            ORDER BY TargetName";
+        return conn.Query(sql, new { custom = onlyCustomModels ? 1 : 0 })
+            .Select(r => new LintHit((string)r.TargetName, (string)r.Model, (string?)r.Detail)).ToList();
+    }
+
     // ---- v4: queries / views / data entities / reports / services / workflow ----
 
     public IReadOnlyList<QueryInfo> SearchQueries(string query, int limit = 50)
@@ -800,6 +895,9 @@ public sealed class MetadataRepository
         var prefix = splitIdx > 0 ? raw.Substring(0, splitIdx) : raw;
         var suffix = splitIdx < raw.Length ? raw.Substring(splitIdx) : string.Empty;
 
+        // Normalize to lowercase so both 'en-US' (Windows filesystem) and 'en-us'
+        // (Linux filesystem, Microsoft packages) match the caller's request.
+        var langsLower = languages?.Select(l => l.ToLowerInvariant()).ToList();
         using var conn = Open();
         // Try two shapes: Key == raw (e.g. "SYS12345") in file=prefix,
         // or Key == suffix (e.g. "12345") in file=prefix. Fall back to
@@ -807,13 +905,13 @@ public sealed class MetadataRepository
         var sql = @"
             SELECT LabelFile AS File, Language, Key, Value
             FROM Labels
-            WHERE (@langs IS NULL OR Language IN @langs)
+            WHERE (@langs IS NULL OR LOWER(Language) IN @langs)
               AND (
                     (LabelFile = @prefix AND Key IN (@raw, @suffix))
                  OR Key = @raw
               )
             ORDER BY LabelFile, Language";
-        return conn.Query<LabelMatch>(sql, new { langs = languages, prefix, raw, suffix }).ToList();
+        return conn.Query<LabelMatch>(sql, new { langs = langsLower, prefix, raw, suffix }).ToList();
     }
 
     /// <summary>
@@ -1069,9 +1167,10 @@ public sealed class MetadataRepository
             }
             foreach (var mtd in t.Methods)
             {
-                conn.Execute(@"INSERT INTO TableMethods(TableId, Name, Signature, IsStatic, ReturnType)
-                               VALUES(@t, @n, @s, @st, @rt)",
-                             new { t = tableId, n = mtd.Name, s = mtd.Signature, st = mtd.IsStatic ? 1 : 0, rt = mtd.ReturnType }, tx);
+                conn.Execute(@"INSERT INTO TableMethods(TableId, Name, Signature, IsStatic, ReturnType, HasDocComment, HasTodayCall, HasDoInsertOrUpdate)
+                               VALUES(@t, @n, @s, @st, @rt, @hd, @ht, @hi)",
+                             new { t = tableId, n = mtd.Name, s = mtd.Signature, st = mtd.IsStatic ? 1 : 0, rt = mtd.ReturnType,
+                                   hd = mtd.HasDocComment ? 1 : 0, ht = mtd.HasTodayCall ? 1 : 0, hi = mtd.HasDoInsertOrUpdate ? 1 : 0 }, tx);
             }
             foreach (var ix in t.Indexes)
             {
@@ -1101,9 +1200,10 @@ public sealed class MetadataRepository
             var classId = conn.ExecuteScalar<long>("SELECT last_insert_rowid()", transaction: tx);
             foreach (var mtd in c.Methods)
             {
-                conn.Execute(@"INSERT INTO Methods(ClassId, Name, Signature, IsStatic, ReturnType)
-                               VALUES(@c, @n, @s, @st, @rt)",
-                             new { c = classId, n = mtd.Name, s = mtd.Signature, st = mtd.IsStatic ? 1 : 0, rt = mtd.ReturnType }, tx);
+                conn.Execute(@"INSERT INTO Methods(ClassId, Name, Signature, IsStatic, ReturnType, HasDocComment, HasTodayCall, HasDoInsertOrUpdate)
+                               VALUES(@c, @n, @s, @st, @rt, @hd, @ht, @hi)",
+                             new { c = classId, n = mtd.Name, s = mtd.Signature, st = mtd.IsStatic ? 1 : 0, rt = mtd.ReturnType,
+                                   hd = mtd.HasDocComment ? 1 : 0, ht = mtd.HasTodayCall ? 1 : 0, hi = mtd.HasDoInsertOrUpdate ? 1 : 0 }, tx);
             }
             foreach (var a in c.Attributes)
             {

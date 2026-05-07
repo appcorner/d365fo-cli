@@ -528,6 +528,183 @@ public sealed class GenerateRoleCommand : Command<GenerateRoleCommand.Settings>
 }
 
 /// <summary>
+/// Scaffolds an <c>AxReport</c> + matching <c>SrsReportDataProviderBase</c> AxClass.
+/// Mirrors upstream MCP <c>generate_smart_report</c>. ROADMAP §P3.
+/// </summary>
+public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settings>
+{
+    public sealed class Settings : GenerateSettings
+    {
+        [CommandArgument(0, "<NAME>")]
+        [System.ComponentModel.Description("AOT report name, e.g. FleetVehicleReport.")]
+        public string Name { get; init; } = "";
+
+        [CommandOption("--dp <CLASS>")]
+        [System.ComponentModel.Description("Primary data provider class name. Defaults to <Name>DP.")]
+        public string? DpClass { get; init; }
+
+        [CommandOption("--tmp <TABLE>")]
+        [System.ComponentModel.Description("Temp table class name used by the primary DP. Defaults to <Name>Tmp.")]
+        public string? TmpTable { get; init; }
+
+        [CommandOption("--dataset <NAME>")]
+        [System.ComponentModel.Description("Primary dataset name inside the report. Defaults to <Name>DS.")]
+        public string? DatasetName { get; init; }
+
+        [CommandOption("--caption <TEXT>")]
+        public string? Caption { get; init; }
+
+        [CommandOption("--field <FIELD>")]
+        [System.ComponentModel.Description("Tablix column field name (repeatable). Generates header + data rows in the tablix.")]
+        public string[]? Fields { get; init; }
+
+        [CommandOption("--parameter <NAME[:TYPE]>")]
+        [System.ComponentModel.Description("Report parameter (repeatable). Format: Name or Name:Type. Type: String (default), Integer, DateTime, Boolean, Decimal.")]
+        public string[]? Parameters { get; init; }
+
+        [CommandOption("--extra-dataset <NAME:DPCLASS>")]
+        [System.ComponentModel.Description("Additional dataset (repeatable). Format: DatasetName:DPClassName. Each produces its own tablix in the design.")]
+        public string[]? ExtraDatasets { get; init; }
+
+        [CommandOption("--out-dp <PATH>")]
+        [System.ComponentModel.Description("Output path for the primary DP class XML. Defaults to sibling of --out named <DpClass>.xml.")]
+        public string? OutDp { get; init; }
+
+        [CommandOption("--out-contract <PATH>")]
+        [System.ComponentModel.Description("Output path for the DataContract class XML. Auto-derived when --parameter is used.")]
+        public string? OutContract { get; init; }
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        if (string.IsNullOrWhiteSpace(settings.Name))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "Report name required."));
+
+        var hasInstall = !string.IsNullOrWhiteSpace(settings.InstallTo);
+        var hasOut     = !string.IsNullOrWhiteSpace(settings.Out);
+        if (!hasInstall && !hasOut)
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "--out or --install-to is required."));
+
+        // --- Parse extra datasets ---
+        List<ReportDatasetSpec>? extraDatasets = null;
+        if (settings.ExtraDatasets is { Length: > 0 })
+        {
+            extraDatasets = [];
+            foreach (var raw in settings.ExtraDatasets)
+            {
+                var parts = raw.Split(':', 2);
+                if (parts.Length < 2 || string.IsNullOrWhiteSpace(parts[1]))
+                    return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                        $"--extra-dataset '{raw}' must be in Name:DPClass format."));
+                extraDatasets.Add(new ReportDatasetSpec(parts[0], parts[1]));
+            }
+        }
+
+        // --- Parse parameters ---
+        List<ReportParameterSpec>? paramSpecs = null;
+        if (settings.Parameters is { Length: > 0 })
+        {
+            paramSpecs = settings.Parameters.Select(p =>
+            {
+                var parts = p.Split(':', 2);
+                return new ReportParameterSpec(parts[0], parts.Length > 1 ? parts[1] : "String");
+            }).ToList();
+        }
+
+        var spec = new ReportSpec(
+            settings.Name,
+            settings.DpClass,
+            settings.TmpTable,
+            settings.DatasetName,
+            settings.Caption,
+            extraDatasets is { Count: > 0 }
+                ? [new ReportDatasetSpec(
+                    string.IsNullOrWhiteSpace(settings.DatasetName) ? settings.Name + "DS" : settings.DatasetName,
+                    string.IsNullOrWhiteSpace(settings.DpClass)     ? settings.Name + "DP" : settings.DpClass,
+                    settings.Fields), .. extraDatasets]
+                : null,
+            settings.Fields,
+            paramSpecs);
+
+        var hasContract = spec.Parameters is { Count: > 0 };
+
+        // --- Resolve output paths ---
+        string? reportPath, dpPath, contractPath;
+        if (hasInstall && !hasOut)
+        {
+            reportPath = GenerateInstaller.ResolveInstallPath(kind, "AxReport", settings.Name, settings.InstallTo!, out var f1);
+            if (f1.HasValue) return f1.Value;
+
+            if (!string.IsNullOrWhiteSpace(settings.OutDp))
+            {
+                dpPath = settings.OutDp;
+            }
+            else
+            {
+                dpPath = GenerateInstaller.ResolveInstallPath(kind, "AxClass", spec.EffectiveDpClass, settings.InstallTo!, out var f2);
+                if (f2.HasValue) return f2.Value;
+            }
+
+            if (hasContract)
+            {
+                if (!string.IsNullOrWhiteSpace(settings.OutContract))
+                {
+                    contractPath = settings.OutContract;
+                }
+                else
+                {
+                    contractPath = GenerateInstaller.ResolveInstallPath(kind, "AxClass", spec.ContractClass, settings.InstallTo!, out var f3);
+                    if (f3.HasValue) return f3.Value;
+                }
+            }
+            else contractPath = null;
+        }
+        else
+        {
+            var dir = System.IO.Path.GetDirectoryName(settings.Out!)!;
+            reportPath   = settings.Out!;
+            dpPath       = settings.OutDp ?? System.IO.Path.Combine(dir, spec.EffectiveDpClass + ".xml");
+            contractPath = hasContract
+                ? (settings.OutContract ?? System.IO.Path.Combine(dir, spec.ContractClass + ".xml"))
+                : null;
+        }
+
+        try
+        {
+            var reportResult   = ScaffoldFileWriter.Write(XppScaffolder.Report(spec),   reportPath!,   settings.Overwrite);
+            var dpResult       = ScaffoldFileWriter.Write(XppScaffolder.ReportDp(spec), dpPath!,       settings.Overwrite);
+
+            ScaffoldFileWriter.WriteResult? contractResult = null;
+            if (hasContract && contractPath is not null)
+            {
+                var contractDoc = XppScaffolder.ReportContract(spec);
+                if (contractDoc is not null)
+                    contractResult = ScaffoldFileWriter.Write(contractDoc, contractPath, settings.Overwrite);
+            }
+
+            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            {
+                kind        = "AxReport",
+                name        = spec.Name,
+                dpClass     = spec.EffectiveDpClass,
+                contractClass = spec.ContractClass,
+                datasets    = spec.EffectiveDatasets.Select(ds => new { ds.Name, ds.DpClass }).ToList(),
+                parameters  = spec.Parameters?.Select(p => new { p.Name, p.DataType }).ToList(),
+                report      = new { path = reportResult.Path,   bytes = reportResult.Bytes,   backup = reportResult.BackupPath },
+                dp          = new { path = dpResult.Path,       bytes = dpResult.Bytes,       backup = dpResult.BackupPath },
+                contract    = contractResult is null ? null : new { path = contractResult.Path, bytes = contractResult.Bytes, backup = contractResult.BackupPath },
+                model       = settings.InstallTo,
+            }));
+        }
+        catch (Exception ex)
+        {
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, ex.Message));
+        }
+    }
+}
+
+/// <summary>
 /// Idempotent &quot;add duty / privilege reference into an existing role&quot; merge,
 /// used by <c>generate role --add-to</c> and by the <c>--into-role</c> flag on
 /// <c>generate duty</c> / <c>generate privilege</c>. Loads the role XML,

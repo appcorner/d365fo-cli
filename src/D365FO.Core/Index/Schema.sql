@@ -63,6 +63,9 @@ CREATE TABLE IF NOT EXISTS Methods (
     Signature       TEXT,
     IsStatic        INTEGER NOT NULL DEFAULT 0,
     ReturnType      TEXT,
+    HasDocComment   INTEGER NOT NULL DEFAULT 0,
+    HasTodayCall    INTEGER NOT NULL DEFAULT 0,
+    HasDoInsertOrUpdate INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (ClassId) REFERENCES Classes(ClassId) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS IX_Methods_ClassId_Name ON Methods(ClassId, Name);
@@ -167,6 +170,9 @@ CREATE TABLE IF NOT EXISTS TableMethods (
     Signature       TEXT,
     IsStatic        INTEGER NOT NULL DEFAULT 0,
     ReturnType      TEXT,
+    HasDocComment   INTEGER NOT NULL DEFAULT 0,
+    HasTodayCall    INTEGER NOT NULL DEFAULT 0,
+    HasDoInsertOrUpdate INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (TableId) REFERENCES Tables(TableId) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS IX_TableMethods_TableId ON TableMethods(TableId, Name);

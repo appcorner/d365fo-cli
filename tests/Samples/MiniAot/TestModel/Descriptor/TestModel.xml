@@ -1,0 +1,8 @@
+<AxModelInfo>
+  <Name>TestModel</Name>
+  <Publisher>Contoso</Publisher>
+  <Layer>usr</Layer>
+  <ModuleReferences>
+    <string>ApplicationSuite</string>
+  </ModuleReferences>
+</AxModelInfo>

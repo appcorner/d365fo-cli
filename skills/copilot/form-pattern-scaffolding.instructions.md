@@ -1,16 +1,16 @@
----
+﻿---
 description: Scaffold an AxForm in D365 Finance & Operations using one of the nine canonical patterns (SimpleList, SimpleListDetails, DetailsMaster, DetailsTransaction, Dialog, TableOfContents, Lookup, ListPage, Workspace). Invoke whenever the user asks to "create a form", "scaffold a list page", "make a dialog", or "build a workspace".
 applyTo: '**/AxForm/**,**/*Form.xml'
 ---
-# Authoring AxForm XML — pattern-correct
+# Authoring AxForm XML â€” pattern-correct
 
 > The CLI's `d365fo generate form` mirrors `d365fo-mcp-server`'s
 > `generate_smart_form`. The nine D365FO patterns are validated against real
-> AOT forms (`CustGroup`, `PaymTerm`, `CustTable`, `SalesTable`, …). Hand-rolled
+> AOT forms (`CustGroup`, `PaymTerm`, `CustTable`, `SalesTable`, â€¦). Hand-rolled
 > XML loses ActionPane, QuickFilter, FastTabs, the right `PatternVersion`,
-> and the design-time hooks Visual Studio expects — **never hand-roll**.
+> and the design-time hooks Visual Studio expects â€” **never hand-roll**.
 
-## ⛔ Anti-pattern: escalating workarounds
+## â›” Anti-pattern: escalating workarounds
 
 ```
 WRONG SPIRAL (each step is more wrong):
@@ -19,7 +19,7 @@ WRONG SPIRAL (each step is more wrong):
  3. "PatternVersion 1.0 is fine instead of 1.1"
  4. "I'll add SimpleList without grid columns"
 
-CORRECT — always:
+CORRECT â€” always:
  d365fo generate form <Name> --pattern <P> --table <T> --field <F1> --field <F2> --install-to <Model>
 ```
 
@@ -29,14 +29,14 @@ CORRECT — always:
 d365fo search form <Name> --output json          # collision check
 d365fo get table <PrimaryTable> --output json    # field list for the grid
 
-# Pattern reconnaissance — what do peers use for THIS table / similar entities?
+# Pattern reconnaissance â€” what do peers use for THIS table / similar entities?
 d365fo find form-patterns --table <PrimaryTable> --output json
 d365fo find form-patterns --similar-to <ReferenceForm> --output json
 d365fo find form-patterns --pattern SimpleList --output json   # pattern catalogue
 ```
 
 The analyzer (`d365fo find form-patterns`) reads `<Design><Pattern>` from
-every indexed AxForm. Use it instead of guessing — pass the most-common peer
+every indexed AxForm. Use it instead of guessing â€” pass the most-common peer
 pattern straight into `--pattern` on the next step. With no flags it returns
 a histogram so you can see what shapes exist before drilling in.
 
@@ -88,14 +88,14 @@ d365fo generate form FmFleetWorkspace \
     --install-to FleetManagement
 ```
 
-`--field <F>` is repeatable — these become grid / detail columns. The
+`--field <F>` is repeatable â€” these become grid / detail columns. The
 section template is `--section Name:Caption` (split on the first `:`).
 
 ## Hard rules
 
-- Never hand-roll AxForm XML — always use `--pattern`.
+- Never hand-roll AxForm XML â€” always use `--pattern`.
 - Never skip the primary datasource for SimpleList / Lookup / ListPage / Master / Transaction patterns.
 - Never use `Dialog` or `TableOfContents` patterns for transactional grids.
 - Pre-flight `search form <Name>` before scaffolding to avoid collisions.
-- Caption strings must be labels (BP `BPErrorLabelIsText`) — never raw text.
+- Caption strings must be labels (BP `BPErrorLabelIsText`) â€” never raw text.
 - After scaffolding, run `d365fo build` only on user request.

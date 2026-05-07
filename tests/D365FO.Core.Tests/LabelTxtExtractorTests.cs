@@ -41,7 +41,8 @@ public class LabelTxtExtractorTests : IDisposable
         var batches = ex.ExtractAll(_root).ToList();
         var batch = Assert.Single(batches);
         Assert.Equal(4, batch.Labels.Count);
-        var title = batch.Labels.First(l => l.Key == "Title" && l.Language == "en-us");
+        // Language is normalized to BCP-47 canonical form on ingest: en-us → en-US.
+        var title = batch.Labels.First(l => l.Key == "Title" && l.Language == "en-US");
         Assert.Equal("Fleet Manager", title.Value);
         var multi = batch.Labels.First(l => l.Key == "MultiEq");
         Assert.Equal("a=b=c", multi.Value); // split on first '=' only

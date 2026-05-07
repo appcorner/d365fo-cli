@@ -1,0 +1,202 @@
+using D365FO.Core.Extract;
+using D365FO.Core.Index;
+using System.Text.Json;
+using Xunit;
+
+namespace D365FO.Core.Tests;
+
+/// <summary>
+/// End-to-end pipeline tests driven by a checked-in "mini AOT" fixture.
+/// Covers: XML parse → SQLite ingest → repository queries.
+/// </summary>
+public class MiniAotEndToEndTests : IDisposable
+{
+    private static readonly string SamplesDir =
+        Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Samples", "MiniAot"));
+
+    private readonly string _dbPath = Path.Combine(
+        Path.GetTempPath(), $"d365fo-miniaot-{Guid.NewGuid():N}.sqlite");
+
+    private readonly MetadataRepository _repo;
+
+    public MiniAotEndToEndTests()
+    {
+        _repo = new MetadataRepository(_dbPath);
+        _repo.EnsureSchema();
+
+        var ex = new MetadataExtractor();
+        foreach (var batch in ex.ExtractAll(SamplesDir))
+            _repo.ApplyExtract(batch);
+    }
+
+    public void Dispose()
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        foreach (var ext in new[] { "", "-wal", "-shm" })
+        {
+            var p = _dbPath + ext;
+            if (File.Exists(p)) File.Delete(p);
+        }
+    }
+
+    // ─── Fixture sanity ────────────────────────────────────────────────────
+
+    [Fact]
+    public void Samples_fixture_exists()
+    {
+        Assert.True(Directory.Exists(SamplesDir),
+            $"Fixture directory missing: {SamplesDir}");
+    }
+
+    // ─── Extract: model-level assertions ───────────────────────────────────
+
+    [Fact]
+    public void ExtractAll_finds_one_model_with_correct_publisher()
+    {
+        var ex = new MetadataExtractor();
+        var batches = ex.ExtractAll(SamplesDir).ToList();
+
+        var batch = Assert.Single(batches);
+        Assert.Equal("TestModel", batch.Model);
+        Assert.Equal("Contoso", batch.Publisher);
+        Assert.Equal("usr", batch.Layer);
+    }
+
+    [Fact]
+    public void ExtractAll_has_ApplicationSuite_dependency()
+    {
+        var ex = new MetadataExtractor();
+        var batch = ex.ExtractAll(SamplesDir).Single();
+
+        Assert.Contains("ApplicationSuite", batch.Dependencies);
+    }
+
+    // ─── Extract: table assertions ─────────────────────────────────────────
+
+    [Fact]
+    public void ExtractAll_parses_FmVehicle_fields()
+    {
+        var ex = new MetadataExtractor();
+        var batch = ex.ExtractAll(SamplesDir).Single();
+
+        var table = Assert.Single(batch.Tables);
+        Assert.Equal("FmVehicle", table.Name);
+        Assert.Equal(3, table.Fields.Count);
+
+        var vin = table.Fields.Single(f => f.Name == "VIN");
+        Assert.True(vin.Mandatory);
+        Assert.Equal("VinEdt", vin.EdtName);
+
+        Assert.Contains(table.Fields, f => f.Name == "Make");
+        Assert.Contains(table.Fields, f => f.Name == "Year");
+    }
+
+    // ─── Extract: class assertions ─────────────────────────────────────────
+
+    [Fact]
+    public void ExtractAll_parses_FmVehicleService_methods()
+    {
+        var ex = new MetadataExtractor();
+        var batch = ex.ExtractAll(SamplesDir).Single();
+
+        var cls = Assert.Single(batch.Classes);
+        Assert.Equal("FmVehicleService", cls.Name);
+        Assert.Equal(3, cls.Methods.Count);
+
+        Assert.Contains(cls.Methods, m => m.Name == "new");
+        Assert.Contains(cls.Methods, m => m.Name == "run");
+        Assert.Contains(cls.Methods, m => m.Name == "construct");
+    }
+
+    // ─── Repository: count assertions ──────────────────────────────────────
+
+    [Fact]
+    public void Repository_counts_match_fixture()
+    {
+        var counts = _repo.CountAll();
+        Assert.Equal(1, counts.Tables);
+        Assert.Equal(3, counts.Fields);
+        Assert.Equal(1, counts.Classes);
+    }
+
+    // ─── Repository: GetTableDetails snapshot ──────────────────────────────
+
+    [Fact]
+    public void GetTableDetails_FmVehicle_returns_correct_shape()
+    {
+        var details = _repo.GetTableDetails("FmVehicle");
+        Assert.NotNull(details);
+        Assert.Equal("FmVehicle", details!.Table.Name);
+        Assert.Equal("TestModel", details.Table.Model);
+        Assert.Equal("@Fleet:Vehicle", details.Table.Label);
+        Assert.Equal(3, details.Fields.Count);
+
+        var vin = details.Fields.Single(f => f.Name == "VIN");
+        Assert.True(vin.Mandatory);
+        Assert.Equal("VinEdt", vin.EdtName);
+    }
+
+    [Fact]
+    public void GetTableDetails_FmVehicle_has_alternateKey_index()
+    {
+        var indexes = _repo.GetTableIndexes("FmVehicle");
+        Assert.NotEmpty(indexes);
+        var vinIdx = indexes.Single(i => i.Name == "VINIdx");
+        Assert.True(vinIdx.AlternateKey);
+    }
+
+    // ─── Repository: GetClassDetails snapshot ──────────────────────────────
+
+    [Fact]
+    public void GetClassDetails_FmVehicleService_returns_correct_shape()
+    {
+        var details = _repo.GetClassDetails("FmVehicleService");
+        Assert.NotNull(details);
+        Assert.Equal("FmVehicleService", details!.Class.Name);
+        Assert.Equal("TestModel", details.Class.Model);
+        Assert.Equal(3, details.Methods.Count);
+
+        Assert.Contains(details.Methods, m => m.Name == "construct");
+    }
+
+    // ─── Repository: serialization round-trip ──────────────────────────────
+
+    [Fact]
+    public void GetTableDetails_serializes_to_valid_json()
+    {
+        var details = _repo.GetTableDetails("FmVehicle");
+        Assert.NotNull(details);
+        var json = JsonSerializer.Serialize(details, new JsonSerializerOptions { WriteIndented = false });
+        Assert.StartsWith("{", json);
+        Assert.Contains("FmVehicle", json);
+        Assert.Contains("VIN", json);
+    }
+
+    [Fact]
+    public void GetClassDetails_serializes_to_valid_json()
+    {
+        var details = _repo.GetClassDetails("FmVehicleService");
+        Assert.NotNull(details);
+        var json = JsonSerializer.Serialize(details, new JsonSerializerOptions { WriteIndented = false });
+        Assert.StartsWith("{", json);
+        Assert.Contains("FmVehicleService", json);
+        Assert.Contains("run", json);
+    }
+
+    // ─── Repository: idempotency ────────────────────────────────────────────
+
+    [Fact]
+    public void ApplyExtract_twice_is_idempotent()
+    {
+        var ex = new MetadataExtractor();
+        var batches = ex.ExtractAll(SamplesDir).ToList();
+
+        foreach (var b in batches)
+            _repo.ApplyExtract(b);
+
+        var counts = _repo.CountAll();
+        Assert.Equal(1, counts.Tables);
+        Assert.Equal(3, counts.Fields);
+        Assert.Equal(1, counts.Classes);
+    }
+}

@@ -1,6 +1,7 @@
 using System.IO.Pipes;
 using System.Net;
 using System.Net.Sockets;
+using D365FO.Cli.Commands.Index;
 using D365FO.Core;
 using D365FO.Mcp;
 using Spectre.Console.Cli;
@@ -60,8 +61,20 @@ public sealed class DaemonStartCommand : AsyncCommand<DaemonStartCommand.Setting
         [CommandOption("--db <PATH>")]
         public string? DatabasePath { get; init; }
 
+        [CommandOption("--packages <PATH>")]
+        [System.ComponentModel.Description("PackagesLocalDirectory to watch for XML changes. Defaults to D365FO_PACKAGES_PATH.")]
+        public string? PackagesPath { get; init; }
+
         [CommandOption("--foreground")]
         public bool Foreground { get; init; }
+
+        [CommandOption("--no-watch")]
+        [System.ComponentModel.Description("Disable the automatic file watcher (index refresh on XML change).")]
+        public bool NoWatch { get; init; }
+
+        [CommandOption("--watch-debounce <MS>")]
+        [System.ComponentModel.Description("Debounce delay in milliseconds before triggering index refresh after a file change. Default: 3000.")]
+        public int WatchDebounceMs { get; init; } = 3000;
     }
 
     public override async Task<int> ExecuteAsync(CommandContext ctx, Settings settings)
@@ -82,16 +95,28 @@ public sealed class DaemonStartCommand : AsyncCommand<DaemonStartCommand.Setting
         using var cts = new CancellationTokenSource();
         Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
+        // Resolve packages path for the file watcher.
+        var packagesPath = settings.PackagesPath
+            ?? D365FoSettings.FromEnvironment(settings.DatabasePath).PackagesPath;
+
         var summary = ToolResult<object>.Success(new
         {
             endpoint = DaemonEndpoint.Describe(),
             pid = Environment.ProcessId,
             pidFile = DaemonEndpoint.PidFilePath,
             platform = OperatingSystem.IsWindows() ? "windows-named-pipe" : "unix-socket",
+            watching = !settings.NoWatch && !string.IsNullOrWhiteSpace(packagesPath),
+            watchPath = string.IsNullOrWhiteSpace(packagesPath) ? null : packagesPath,
+            watchDebounceMs = settings.WatchDebounceMs,
         });
 
         // Emit the start envelope so callers know the daemon is listening.
         RenderHelpers.Render(kind, summary);
+
+        // Start file watcher if requested.
+        using var watcher = settings.NoWatch || string.IsNullOrWhiteSpace(packagesPath)
+            ? null
+            : StartWatcher(packagesPath, settings.DatabasePath, settings.WatchDebounceMs, cts.Token);
 
         try
         {
@@ -103,6 +128,77 @@ public sealed class DaemonStartCommand : AsyncCommand<DaemonStartCommand.Setting
             TryDeleteSocket();
         }
         return 0;
+    }
+
+    /// <summary>
+    /// Creates a <see cref="FileSystemWatcher"/> over <paramref name="packagesPath"/>
+    /// that debounces XML changes and triggers an incremental <c>index refresh</c>
+    /// for the affected model. Returns the watcher so the caller can dispose it.
+    /// </summary>
+    private static FileSystemWatcher? StartWatcher(
+        string packagesPath, string? dbPath, int debounceMs, CancellationToken ct)
+    {
+        if (!Directory.Exists(packagesPath)) return null;
+
+        // model name → debounce timer
+        var pending = new Dictionary<string, Timer>(StringComparer.OrdinalIgnoreCase);
+        var @lock = new object();
+
+        void ScheduleRefresh(string modelName)
+        {
+            lock (@lock)
+            {
+                if (pending.TryGetValue(modelName, out var existing))
+                {
+                    existing.Change(debounceMs, Timeout.Infinite);
+                    return;
+                }
+                pending[modelName] = new Timer(_ =>
+                {
+                    lock (@lock) { pending.Remove(modelName); }
+                    if (ct.IsCancellationRequested) return;
+                    // Fire-and-forget incremental extract for this model only.
+                    try
+                    {
+                        IndexExtractCommand.ExtractCore(
+                            OutputMode.Kind.Json,
+                            packagesPath,
+                            dbPath,
+                            modelName,
+                            sinceIso: null);
+                        Console.Error.WriteLine(
+                            D365Json.Serialize(new { @event = "index_refreshed", model = modelName }));
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine(
+                            D365Json.Serialize(new { @event = "index_refresh_failed", model = modelName, error = ex.Message }));
+                    }
+                }, null, debounceMs, Timeout.Infinite);
+            }
+        }
+
+        void OnChanged(object _, FileSystemEventArgs e)
+        {
+            // Identify model: packagesPath/<model>/<model>/Ax*/*.xml
+            var rel = Path.GetRelativePath(packagesPath, e.FullPath);
+            var parts = rel.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 1) return;
+            ScheduleRefresh(parts[0]);
+        }
+
+        var fsw = new FileSystemWatcher(packagesPath)
+        {
+            IncludeSubdirectories = true,
+            Filter = "*.xml",
+            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName,
+            EnableRaisingEvents = true,
+        };
+        fsw.Changed += OnChanged;
+        fsw.Created += OnChanged;
+        fsw.Deleted += OnChanged;
+        fsw.Renamed += (s, e) => OnChanged(s, e);
+        return fsw;
     }
 
     private static async Task AcceptLoop(StdioDispatcher dispatcher, CancellationToken ct)

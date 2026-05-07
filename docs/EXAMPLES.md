@@ -139,10 +139,22 @@ d365fo index history --model Contoso  # filter to one model
 ```sh
 d365fo lint
 d365fo lint --category table-no-index,string-without-edt --all-models
+d365fo lint --category today-usage,do-insert-update,doc-comment-missing
 d365fo lint --format sarif > lint.sarif
 ```
 
-Categories shipped today: `table-no-index`, `ext-named-not-attributed`, `string-without-edt`. Defaults to custom models only; pass `--all-models` to include ISV / MS content. `--format sarif` emits [SARIF 2.1.0](https://sarifweb.azurewebsites.net/) for CI ingestion (GitHub code-scanning, Azure DevOps).
+Six categories shipped:
+
+| Category | BP rule | What it finds |
+|---|---|---|
+| `table-no-index` | — | Tables without any cluster/alternate index |
+| `ext-named-not-attributed` | — | Classes named `*_Extension` missing `[ExtensionOf]` |
+| `string-without-edt` | — | String fields with no Extended Data Type |
+| `today-usage` | `BPUpgradeCodeToday` | Methods calling `today()` instead of `DateTimeUtil::getToday(…)` |
+| `do-insert-update` | — | Methods calling `doInsert()` / `doUpdate()` / `doDelete()` |
+| `doc-comment-missing` | `BPXmlDocNoDocumentationComments` | Methods without `/// <summary>` |
+
+Defaults to custom models only; pass `--all-models` to include ISV / MS content. `--format sarif` emits [SARIF 2.1.0](https://sarifweb.azurewebsites.net/) for CI ingestion (GitHub code-scanning, Azure DevOps). The three method-flag categories (`today-usage`, `do-insert-update`, `doc-comment-missing`) are detected at extract time by scanning `<Source>` text — no full method body is stored in the index.
 
 ### `validate name` — naming-rule linter
 
@@ -327,6 +339,115 @@ d365fo generate role --add-to src/MyModel/AxSecurityRole/FmVehicleAdminRole.xml 
 
 `--add-to` validates the root element (`AxSecurityRole`), dedupes by `Name` (case-insensitive), and returns `NoChange` when every reference already exists.
 
+### Report (`AxReport` + DP class + data contract)
+
+```sh
+# Minimal — one dataset, no columns specified (tablix shell only)
+d365fo generate report FmVehicleReport \
+  --dp FmVehicleReportDP \
+  --tmp FmVehicleReportTmp \
+  --dataset FmVehicleDS \
+  --caption "@Fleet:VehicleReport" \
+  --out src/MyModel/AxReport/FmVehicleReport.xml
+
+# With tablix column definitions — generates header row + data row in the tablix
+d365fo generate report FmVehicleReport \
+  --dp FmVehicleReportDP --tmp FmVehicleReportTmp \
+  --field VIN --field Make --field Model --field Year \
+  --caption "@Fleet:VehicleReport" \
+  --out src/MyModel/AxReport/FmVehicleReport.xml
+
+# With report parameters — auto-generates a DataContract class (FmVehicleReportDPContract.xml)
+d365fo generate report FmVehicleReport \
+  --dp FmVehicleReportDP \
+  --field VIN --field Make --field Year \
+  --parameter FromDate:DateTime --parameter ToDate:DateTime --parameter Customer \
+  --out src/MyModel/AxReport/FmVehicleReport.xml
+
+# Multi-dataset — primary dataset + additional via --extra-dataset
+d365fo generate report FmFleetSummaryReport \
+  --dp FmFleetSummaryReportDP \
+  --field VehicleCount --field TotalMileage \
+  --extra-dataset FmFleetCostsDS:FmFleetCostsDP \
+  --extra-dataset FmFleetIncidentsDS:FmFleetIncidentsDP \
+  --parameter PeriodYear:Integer \
+  --out src/MyModel/AxReport/FmFleetSummaryReport.xml
+```
+
+The command atomically writes **two or three XML files**:
+
+| File | AOT type | Always? |
+|---|---|---|
+| `<Name>.xml` | `AxReport` — datasets, auto-design, tablix(es) with column hierarchy | ✅ |
+| `<DpClass>.xml` | `AxClass` extending `SrsReportDataProviderBase` — one `[SRSReportDataSet]` getter per dataset, `QueryRun` processReport skeleton | ✅ |
+| `<DpClass>Contract.xml` | `AxClass` extending `SrsReportDataContractBase` — one `parm*()` accessor per `--parameter` | only when `--parameter` is used |
+
+Additional output path overrides: `--out-dp <PATH>`, `--out-contract <PATH>`.
+
+Parameter types accepted: `String` (default), `Integer`, `DateTime`, `Boolean`, `Decimal`.
+
+---
+
+## Suggest / Analyze
+
+### `suggest extension` — extensibility strategy advisor
+
+```sh
+# Auto-detect object kind and rank extension strategies
+d365fo suggest extension CustTable --output json
+
+# Hint the kind explicitly when needed
+d365fo suggest extension SalesFormLetterService --kind Class --output json
+d365fo suggest extension SalesTable --kind Table  --output json
+d365fo suggest extension CustTable  --kind Form   --output json
+```
+
+The response ranks each strategy by `confidence` (`high` / `medium` / `low`) and includes a ready-to-run `command` string:
+
+```json
+{
+  "target": "CustTable",
+  "targetKind": "Table",
+  "signals": { "isFinal": false, "delegateCount": 3, "existingCoc": 12, "existingHandlers": 7 },
+  "recommendations": [
+    { "rank": 1, "approach": "Table extension",     "confidence": "high",   "command": "d365fo generate extension Table CustTable <Suffix> --out <PATH>" },
+    { "rank": 2, "approach": "Event handler (data event)", "confidence": "high", "command": "d365fo generate event-handler --source-kind Table --source CustTable --event Inserted --out <PATH>" },
+    { "rank": 3, "approach": "CoC (table method wrapping)", "confidence": "medium", "command": "d365fo generate coc CustTable --method insert --out <PATH>" }
+  ]
+}
+```
+
+Use this command before scaffolding to confirm the right approach based on what's already in the codebase.
+
+### `analyze completeness` — cross-check project against index
+
+```sh
+# Analyse a full model folder (walks all *.xml recursively)
+d365fo analyze completeness src/MyModel --output json
+
+# Analyse a single AOT XML file
+d365fo analyze completeness src/MyModel/AxSecurityRole/FmAdminRole.xml
+
+# Skip slow label checks in CI (focus on structural refs only)
+d365fo analyze completeness src/MyModel --skip-labels --output json
+
+# Pipe into jq to count issues by code
+d365fo analyze completeness src/MyModel --output json \
+  | jq '.data.issues | group_by(.code) | map({code: .[0].code, count: length})'
+```
+
+Issue codes reported:
+
+| Code | Severity | What it means |
+|---|---|---|
+| `MISSING_DUTY` | warning | `AxSecurityRole` references a duty not in the index |
+| `MISSING_PRIVILEGE` | warning | Role or duty references a privilege not in the index |
+| `MISSING_EDT` | warning | `AxTable` field references an EDT not in the index |
+| `MISSING_LABEL` | warning | An AOT element value holds a `@File:Key` token with no indexed translation |
+| `PARSE_ERROR` | error | XML file cannot be parsed |
+
+Flags: `--skip-labels`, `--skip-edts`, `--skip-security`.
+
 ---
 
 ## Labels (read & write)
@@ -430,12 +551,23 @@ After `dotnet publish src/D365FO.Mcp -c Release -r osx-arm64` you get a standalo
 For latency-sensitive integrations, run the CLI as a daemon so the SQLite handle and read caches stay hot:
 
 ```sh
-d365fo daemon start
+d365fo daemon start                                  # named pipe / Unix socket + file watcher
+d365fo daemon start --packages J:\AosService\PackagesLocalDirectory
+d365fo daemon start --no-watch                      # disable auto index refresh
+d365fo daemon start --watch-debounce 5000           # wait 5 s after last change before refresh
 d365fo daemon status
 d365fo daemon stop
 ```
 
-Transport: Windows named pipe `\\.\pipe\d365fo-cli`; Unix socket at `$XDG_RUNTIME_DIR/d365fo-cli.sock` (fallback `$TMPDIR`). The frame format matches `d365fo-mcp`: one newline-terminated JSON-RPC request per connection, one response, close.
+Transport: Windows named pipe `\\\\.\\ pipe\\d365fo-cli`; Unix socket at `$XDG_RUNTIME_DIR/d365fo-cli.sock` (fallback `$TMPDIR`). The frame format matches `d365fo-mcp`: one newline-terminated JSON-RPC request per connection, one response, close.
+
+The daemon also starts a `FileSystemWatcher` over `D365FO_PACKAGES_PATH` (or `--packages`). When `*.xml` files change, it debounces (default 3 s) and automatically triggers an incremental `index refresh` for the affected model, emitting a JSON notification to stderr:
+
+```json
+{ "event": "index_refreshed", "model": "Contoso" }
+```
+
+Pass `--no-watch` to disable the watcher (e.g. read-only environments or network shares).
 
 ---
 

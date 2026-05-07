@@ -17,7 +17,7 @@ public sealed class LintCommand : Command<LintCommand.Settings>
     public sealed class Settings : D365OutputSettings
     {
         [CommandOption("--category <NAMES>")]
-        [System.ComponentModel.Description("Comma/semicolon-separated subset of: table-no-index, ext-named-not-attributed, string-without-edt.")]
+        [System.ComponentModel.Description("Comma/semicolon-separated subset of: table-no-index, ext-named-not-attributed, string-without-edt, today-usage, do-insert-update, doc-comment-missing.")]
         public string? Category { get; init; }
 
         [CommandOption("--all-models")]
@@ -30,7 +30,8 @@ public sealed class LintCommand : Command<LintCommand.Settings>
     }
 
     private static readonly string[] All =
-        { "table-no-index", "ext-named-not-attributed", "string-without-edt" };
+        { "table-no-index", "ext-named-not-attributed", "string-without-edt",
+          "today-usage", "do-insert-update", "doc-comment-missing" };
 
     public override int Execute(CommandContext ctx, Settings settings)
     {
@@ -51,6 +52,9 @@ public sealed class LintCommand : Command<LintCommand.Settings>
                 "table-no-index" => repo.FindTablesWithoutIndex(onlyCustom),
                 "ext-named-not-attributed" => repo.FindExtensionNamedButNotAttributed(onlyCustom),
                 "string-without-edt" => repo.FindStringFieldsWithoutEdt(onlyCustom),
+                "today-usage" => repo.FindTodayCallMethods(onlyCustom),
+                "do-insert-update" => repo.FindDoInsertOrUpdateMethods(onlyCustom),
+                "doc-comment-missing" => repo.FindMissingDocCommentMethods(onlyCustom),
                 _ => Array.Empty<LintHit>(),
             };
             hitsByCat[cat] = hits;
@@ -106,6 +110,12 @@ public sealed class LintCommand : Command<LintCommand.Settings>
             "Classes named '*_Extension' must carry [ExtensionOf(...)] or CoC / event-handler attributes."),
         ["string-without-edt"] = ("warning", "StringFieldWithoutEdt",
             "String fields should use an Extended Data Type so they inherit length/label/help centrally."),
+        ["today-usage"] = ("warning", "BPUpgradeCodeToday",
+            "today() ignores the user time-zone. Use DateTimeUtil::getToday(DateTimeUtil::getUserPreferredTimeZone())."),
+        ["do-insert-update"] = ("error", "DoInsertOrUpdateBypass",
+            "doInsert()/doUpdate()/doDelete() bypass overridden table methods and framework validation. Reserved for data-fix/migration scripts."),
+        ["doc-comment-missing"] = ("note", "BPXmlDocNoDocumentationComments",
+            "Public/protected methods should carry a meaningful /// <summary> XML doc comment."),
     };
 
     private static object BuildSarif(Dictionary<string, IReadOnlyList<LintHit>> hitsByCat)
