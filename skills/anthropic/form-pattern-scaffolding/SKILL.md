@@ -3,6 +3,8 @@ name: form-pattern-scaffolding
 description: Scaffold an AxForm in D365 Finance & Operations using one of the nine canonical patterns (SimpleList, SimpleListDetails, DetailsMaster, DetailsTransaction, Dialog, TableOfContents, Lookup, ListPage, Workspace). Invoke whenever the user asks to "create a form", "scaffold a list page", "make a dialog", or "build a workspace".
 applies_when: User intent mentions creating an AxForm, choosing a form pattern, list pages, master records, dialogs, lookups, workspaces, or details/transaction (header+lines) forms.
 ---
+> ⛔ **NEVER write X++ AOT XML files directly** via PowerShell, terminal file commands (`Set-Content`, `Out-File`, `New-Item`), editor write tools, or any raw text approach. The XML schema (`<AxClass>`, `<AxTable>`, `<AxForm>`, `<Methods>`, `<SourceCode>`) is proprietary — LLMs have not been trained on it reliably. **ALWAYS use `d365fo generate …` commands** to produce correct AOT XML. If `d365fo` is unavailable in PATH, stop and ask the user to install it.
+
 # Authoring AxForm XML — pattern-correct
 
 > The CLI's `d365fo generate form` mirrors `d365fo-mcp-server`'s

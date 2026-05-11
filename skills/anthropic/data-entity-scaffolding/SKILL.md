@@ -3,6 +3,8 @@ name: data-entity-scaffolding
 description: Scaffold an AxDataEntityView (data entity) in D365 Finance & Operations for OData / DMF (Data Management Framework) integration. Use when the user asks to "create a data entity", "expose a table to OData", or "scaffold an entity for DMF".
 applies_when: User intent mentions data entity, AxDataEntityView, OData, DMF, public entity name, public collection name, or exposing tables to integrations.
 ---
+> ⛔ **NEVER write X++ AOT XML files directly** via PowerShell, terminal file commands (`Set-Content`, `Out-File`, `New-Item`), editor write tools, or any raw text approach. The XML schema (`<AxClass>`, `<AxTable>`, `<AxForm>`, `<Methods>`, `<SourceCode>`) is proprietary — LLMs have not been trained on it reliably. **ALWAYS use `d365fo generate …` commands** to produce correct AOT XML. If `d365fo` is unavailable in PATH, stop and ask the user to install it.
+
 # Authoring AxDataEntityView XML
 
 > Data entities are the supported integration surface for D365FO — OData v4,
