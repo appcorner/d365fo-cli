@@ -2,7 +2,6 @@
 description: Create a Table / Form / Edt / Enum extension (NOT a class CoC extension) in D365 Finance & Operations. Use when the user asks to "extend a table", "add a field to standard CustTable", "extend an EDT", "add an enum value", or "extend a form via FormExtension".
 applyTo: '**/AxTableExtension/**,**/AxFormExtension/**,**/AxEdtExtension/**,**/AxEnumExtension/**,**/*.Extension.xml'
 ---
-
 > ⛔ **NEVER write X++ AOT XML files directly** via PowerShell, terminal file commands (`Set-Content`, `Out-File`, `New-Item`), editor write tools, or any raw text approach. The XML schema (`<AxClass>`, `<AxTable>`, `<AxForm>`, `<Methods>`, `<SourceCode>`) is proprietary — LLMs have not been trained on it reliably. **ALWAYS use `d365fo generate …` commands** to produce correct AOT XML. If `d365fo` is unavailable in PATH, stop and ask the user to install it.
 
 # Authoring object extensions (Table / Form / Edt / Enum)
