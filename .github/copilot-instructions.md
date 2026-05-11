@@ -10,7 +10,7 @@
 
 This workspace is the **`d365fo` CLI** — a metadata-aware command-line tool for D365 Finance & Operations. It exposes the same knowledge as `d365fo-mcp-server` but as deterministic shell commands instead of MCP tool calls. Use it whenever you need to reason about a D365FO codebase without burning conversation tokens on long XML or AOT dumps.
 
-> **Audience.** This file gives an AI assistant (GitHub Copilot, Claude Code, Codex CLI, …) the rules for using the `d365fo` CLI to author X++ correctly. Human-facing docs live in [README.md](../README.md) and [docs/](../docs/).
+> **Audience.** This file gives an AI assistant (GitHub Copilot, Claude Code, Codex CLI, …) the rules for using the `d365fo` CLI to author X++ correctly. Human-facing docs live in the [d365fo-cli repository](https://github.com/dynamics365ninja/d365fo-cli).
 
 ---
 
@@ -115,6 +115,60 @@ When the user just wants to *understand* code, never edit:
 - **NEVER auto-run `d365fo build`, `sync`, `bp check`, or `test run`.** They block the user (Windows VM, slow). After scaffolding, say *"Changes scaffolded. Run `d365fo build` when you're ready to validate."* Only build on explicit request ("build", "compile", "check errors").
 - **NEVER use `replace_string_in_file` on `.xml` AOT files when an `index refresh` has not been run since the last edit.** You'll get pre-edit data back from `d365fo get`.
 - **NEVER infer the target model from search results.** Models are policy boundaries (ISV vs customer). Ask, or read from the project's `.rnrproj`.
+
+---
+
+## ⛔ Forbidden agent actions — D365FO XML files
+
+### 5. Forbidden built-in tools for AOT objects
+
+For any D365FO object (`.xml` AOT files, `.xpp` source):
+
+| Tool / action | Why forbidden | Use instead |
+|---|---|---|
+| `create_file` | Wrong location, spaces in path, causes "not valid metadata elements" | `d365fo generate … --out <PATH>` or `--install-to <Model>` |
+| `edit_file` / `apply_patch` / `replace_string_in_file` on raw AOT XML | Corrupts `<SourceCode>` escaping, breaks `<Methods>` nesting | `d365fo generate … --overwrite` for full replace; hand-edit only after `index refresh` |
+| `read_file` on AOT XML to understand object shape | Objects live in SQL index, not as readable source | `d365fo get class/table/form <Name> --output json` |
+| `file_search` / `grep_search` across AOT XML | Can't parse the schema; returns misleading snippets | `d365fo search <type> <query> --output json` |
+| Any shell command to **write** AOT XML (`Set-Content`, `Out-File`, `[IO.File]::WriteAllText`, `New-Item`) | VS 2022 MCP does not support interactive terminal sessions — spawned PowerShell/Python processes hang forever waiting for stdin, causing an infinite spinner with no output | `d365fo generate …` |
+
+### 6. NEVER use scripts as a fallback — and NEVER read-then-write
+
+When `d365fo` is unavailable or returns an error, **NEVER**:
+
+- ❌ Write or run PowerShell scripts (`.ps1`) to modify D365FO XML files
+- ❌ Write or run Python scripts to patch XML
+- ❌ Use any shell execution (`run_in_terminal`, terminal tools) to write AOT files
+- ❌ Generate `Set-Content`, `Out-File`, `[System.IO.File]::WriteAllText` or similar file-write commands targeting `.xml` AOT files
+
+**Critical anti-pattern — NEVER do this:**
+
+```
+// ❌ WRONG — looks reasonable, always fails in VS 2022
+read_file(path)                      // reads XML for "context" — succeeds
+→ manually construct XML edit        // LLM guesses the schema — wrong
+→ generate PowerShell Set-Content    // process spawns, hangs forever, no output
+```
+
+`read_file` exists in VS 2022 but `write_file`/`edit_file` do not. The only correct path to produce AOT XML is `d365fo generate …`.
+
+**Second critical anti-pattern — "CLI failed but I have metadata from open files":**
+
+```
+// ❌ WRONG — a common escalation that must NEVER happen
+d365fo get class Foo --output json   // returns ok:false, internal error
+→ "I verified the metadata from open XML files"   // agent reads raw XML instead
+→ "I have everything I need, proceeding with refactoring"  // agent writes XML directly
+```
+
+**This is forbidden regardless of where the metadata came from.** Even when you can read the correct field names, method signatures, or enum values from open files — the *write path* is still broken without `d365fo generate`. Metadata from open files does **not** substitute for the CLI. Stop and report the `d365fo` error to the user.
+
+**Instead, when a `d365fo` command cannot complete the operation:**
+
+1. Report the exact error to the user (`ok: false` + `error.message`).
+2. Suggest the correct `d365fo` command to use next.
+3. **Skip the step entirely** — never attempt a workaround via scripts or shell.
+4. If no `d365fo` command exists for the operation, tell the user to perform it manually in Visual Studio AOT.
 
 ---
 
@@ -390,7 +444,7 @@ d365fo generate form <Name> --pattern <P> --table <T> \
        --field <F1> --field <F2> --install-to <Model>   # 3. pattern-correct scaffold
 ```
 
-Pattern catalogue: `SimpleList`, `SimpleListDetails`, `DetailsMaster`, `DetailsTransaction`, `Dialog`, `TableOfContents`, `Lookup`, `ListPage`, `Workspace`. See [docs/EXAMPLES.md](../docs/EXAMPLES.md#form-any-of-nine-d365fo-patterns).
+Pattern catalogue: `SimpleList`, `SimpleListDetails`, `DetailsMaster`, `DetailsTransaction`, `Dialog`, `TableOfContents`, `Lookup`, `ListPage`, `Workspace`. See [docs/EXAMPLES.md](https://github.com/dynamics365ninja/d365fo-cli/blob/main/docs/EXAMPLES.md#form-any-of-nine-d365fo-patterns).
 
 ### Tracing security
 
@@ -423,9 +477,9 @@ Combine Learn (syntax authority) with `d365fo` (real metadata: table/field/metho
 
 ## 📦 See also
 
-- [README.md](../README.md) — features, install, agent integration.
-- [docs/SETUP.md](../docs/SETUP.md) — install + configure the CLI and bridge.
-- [docs/EXAMPLES.md](../docs/EXAMPLES.md) — one worked example per command.
-- [docs/MIGRATION_FROM_MCP.md](../docs/MIGRATION_FROM_MCP.md) — moving from `d365fo-mcp-server`.
-- [docs/ROADMAP.md](../docs/ROADMAP.md) — what's still planned.
-- [skills/](../skills/) — focused workflow skills (Copilot + Anthropic flavours) for `Claude Code`, GitHub Copilot, and other agent harnesses.
+- [README.md](https://github.com/dynamics365ninja/d365fo-cli/blob/main/README.md) — features, install, agent integration.
+- [docs/SETUP.md](https://github.com/dynamics365ninja/d365fo-cli/blob/main/docs/SETUP.md) — install + configure the CLI and bridge.
+- [docs/EXAMPLES.md](https://github.com/dynamics365ninja/d365fo-cli/blob/main/docs/EXAMPLES.md) — one worked example per command.
+- [docs/MIGRATION_FROM_MCP.md](https://github.com/dynamics365ninja/d365fo-cli/blob/main/docs/MIGRATION_FROM_MCP.md) — moving from `d365fo-mcp-server`.
+- [docs/ROADMAP.md](https://github.com/dynamics365ninja/d365fo-cli/blob/main/docs/ROADMAP.md) — what's still planned.
+- `.github/instructions/*.instructions.md` — focused workflow skills installed by `Install-D365FoCopilotSkills.ps1` into this repo (Copilot reads them automatically from `.github/instructions/`).

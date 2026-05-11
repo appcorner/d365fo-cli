@@ -10,6 +10,8 @@ applyTo:
 appliesWhen: User intent mentions extending a Table / Form / Edt / Enum (not a class) — adding fields to a standard table, adding controls to a standard form, extending an enum or EDT.
 ---
 
+> ⛔ **NEVER write X++ AOT XML files directly** via PowerShell, terminal file commands (`Set-Content`, `Out-File`, `New-Item`), editor write tools, or any raw text approach. The XML schema (`<AxClass>`, `<AxTable>`, `<AxForm>`, `<Methods>`, `<SourceCode>`) is proprietary — LLMs have not been trained on it reliably. **ALWAYS use `d365fo generate …` commands** to produce correct AOT XML. If `d365fo` is unavailable in PATH, stop and ask the user to install it.
+
 # Authoring object extensions (Table / Form / Edt / Enum)
 
 > Object extensions are the **non-intrusive** way to add fields to standard

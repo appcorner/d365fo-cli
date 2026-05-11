@@ -2,6 +2,9 @@
 description: Guidance for authoring or extending X++ classes in D365 Finance & Operations. Invoke whenever the user asks to "create a class", "extend a class", "add a method", or write any X++ that touches CoC.
 applyTo: '**/*.xpp,**/AxClass/**,**/*Class.xml'
 ---
+
+> ⛔ **NEVER write X++ AOT XML files directly** via PowerShell, terminal file commands (`Set-Content`, `Out-File`, `New-Item`), editor write tools, or any raw text approach. The XML schema (`<AxClass>`, `<AxTable>`, `<AxForm>`, `<Methods>`, `<SourceCode>`) is proprietary — LLMs have not been trained on it reliably. **ALWAYS use `d365fo generate …` commands** to produce correct AOT XML. If `d365fo` is unavailable in PATH, stop and ask the user to install it.
+
 # Authoring X++ classes with the d365fo index
 
 Before you write or modify any X++ class, **ground yourself in the index**. The

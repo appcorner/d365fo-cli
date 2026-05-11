@@ -2,6 +2,9 @@
 description: Create AxTable XML in D365 Finance & Operations using business-role pattern presets (Main / Transaction / Parameter / Group / Reference / WorksheetHeader / WorksheetLine), or add fields / indexes / relations to existing tables. Use whenever the user asks to "create a table", "scaffold a master/transaction/parameter table", "add a field", or "set TableGroup / TableType".
 applyTo: '**/AxTable/**,**/*Table.xml'
 ---
+
+> ⛔ **NEVER write X++ AOT XML files directly** via PowerShell, terminal file commands (`Set-Content`, `Out-File`, `New-Item`), editor write tools, or any raw text approach. The XML schema (`<AxClass>`, `<AxTable>`, `<AxForm>`, `<Methods>`, `<SourceCode>`) is proprietary — LLMs have not been trained on it reliably. **ALWAYS use `d365fo generate …` commands** to produce correct AOT XML. If `d365fo` is unavailable in PATH, stop and ask the user to install it.
+
 # Creating & modifying AxTable definitions
 
 > The CLI's `d365fo generate table` mirrors `d365fo-mcp-server`'s

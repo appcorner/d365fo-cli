@@ -2,6 +2,9 @@
 description: X++ statement-level and type-system rules — switch / break, ternary, no-DB-null sentinels, casting (`as` / `is`), `using` blocks, embedded function declarations. Invoke when writing any non-trivial X++ control flow or type conversion.
 applyTo: '**/*.xpp,**/AxClass/**,**/AxTable/**'
 ---
+
+> ⛔ **NEVER write X++ AOT XML files directly** via PowerShell, terminal file commands (`Set-Content`, `Out-File`, `New-Item`), editor write tools, or any raw text approach. The XML schema (`<AxClass>`, `<AxTable>`, `<AxForm>`, `<Methods>`, `<SourceCode>`) is proprietary — LLMs have not been trained on it reliably. **ALWAYS use `d365fo generate …` commands** to produce correct AOT XML. If `d365fo` is unavailable in PATH, stop and ask the user to install it.
+
 # X++ statement & type rules
 
 > **Sources of truth:** [learn:xpp-conditional](https://learn.microsoft.com/en-us/dynamics365/fin-ops-core/dev-itpro/dev-ref/xpp-conditional) and [learn:xpp-variables-data-types](https://learn.microsoft.com/en-us/dynamics365/fin-ops-core/dev-itpro/dev-ref/xpp-variables-data-types).

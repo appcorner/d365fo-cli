@@ -66,7 +66,7 @@ if (-not (Test-Path $XppRepo)) {
 # ── Regenerate Skills if the source folder is stale ───────────────────────────
 $skillFiles = Get-ChildItem -Path $skillsSrc -Filter '*.instructions.md' -ErrorAction SilentlyContinue
 if ($skillFiles.Count -eq 0) {
-    Write-Warning "No *.instructions.md found in $skillsSrc — running emit-skills.py first..."
+    Write-Warning "No *.instructions.md found in $skillsSrc - running emit-skills.py first..."
     $py = Get-Command python -ErrorAction SilentlyContinue
     if (-not $py) { $py = Get-Command python3 -ErrorAction SilentlyContinue }
     if ($py) {

@@ -2,6 +2,9 @@
 description: Use Git as the review layer for AI-driven D365FO edits, and use `d365fo review diff` to get an AOT-semantic summary of XML changes. Invoke whenever the user is about to start a non-trivial change, before "accepting" AI edits, or wants a structural diff (added classes, modified table fields, new CoC wrappers).
 applyTo: '**/AxClass/**,**/AxTable/**,**/AxForm/**,**/*.xpp,**/*.xml'
 ---
+
+> ⛔ **NEVER write X++ AOT XML files directly** via PowerShell, terminal file commands (`Set-Content`, `Out-File`, `New-Item`), editor write tools, or any raw text approach. The XML schema (`<AxClass>`, `<AxTable>`, `<AxForm>`, `<Methods>`, `<SourceCode>`) is proprietary — LLMs have not been trained on it reliably. **ALWAYS use `d365fo generate …` commands** to produce correct AOT XML. If `d365fo` is unavailable in PATH, stop and ask the user to install it.
+
 # Git-checkpoint review workflow
 
 > Visual Studio 2022 has no inline accept/reject UI for AI edits. Use Git as
