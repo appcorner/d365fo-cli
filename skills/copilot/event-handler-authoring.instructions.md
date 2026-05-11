@@ -2,6 +2,9 @@
 description: Subscribe to a D365FO event (data event on a table, form / form-data-source / form-data-field event, custom delegate on a class) by scaffolding an event-handler class. Use when the user asks to "subscribe to an event", "react to inserted/deleted/updated", or "hook a delegate".
 applyTo: '**/AxClass/**EventHandler*.xml,**/AxClass/**Handler*.xml'
 ---
+
+> ⛔ **NEVER write X++ AOT XML files directly** via PowerShell, terminal file commands (`Set-Content`, `Out-File`, `New-Item`), editor write tools, or any raw text approach. The XML schema (`<AxClass>`, `<AxTable>`, `<AxForm>`, `<Methods>`, `<SourceCode>`) is proprietary — LLMs have not been trained on it reliably. **ALWAYS use `d365fo generate …` commands** to produce correct AOT XML. If `d365fo` is unavailable in PATH, stop and ask the user to install it.
+
 # Subscribing to D365FO events safely
 
 > Event handlers are the right choice when you need to **react** to a

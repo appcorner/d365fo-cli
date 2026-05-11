@@ -9,6 +9,8 @@ applyTo:
 appliesWhen: User intent mentions labels, translations, `@SYS`, `@MODULE`, display strings, or any of the `d365fo label create / rename / delete` operations.
 ---
 
+> ⛔ **NEVER write X++ AOT XML files directly** via PowerShell, terminal file commands (`Set-Content`, `Out-File`, `New-Item`), editor write tools, or any raw text approach. The XML schema (`<AxClass>`, `<AxTable>`, `<AxForm>`, `<Methods>`, `<SourceCode>`) is proprietary — LLMs have not been trained on it reliably. **ALWAYS use `d365fo generate …` commands** to produce correct AOT XML. If `d365fo` is unavailable in PATH, stop and ask the user to install it.
+
 # Label workflow — reuse, search, edit
 
 > Hardcoded UI strings fail BP `BPErrorLabelIsText`. Every string passed to
