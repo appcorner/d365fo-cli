@@ -221,14 +221,15 @@ public sealed class MetadataRepository
         using var conn = Open();
         var like = $"%{query}%";
         var langsLower = languages?.Select(l => l.ToLowerInvariant()).ToList();
+        var hasLangFilter = langsLower is { Count: > 0 };
         var sql = @"
             SELECT LabelFile AS File, Language, Key, Value
             FROM Labels
             WHERE (Value LIKE @like OR Key LIKE @like)
-              AND (@langs IS NULL OR LOWER(Language) IN @langs)
+              AND (@hasLangFilter = 0 OR LOWER(Language) IN @langs)
             ORDER BY LabelFile, Key
             LIMIT @limit";
-        return conn.Query<LabelMatch>(sql, new { like, langs = langsLower, limit }).ToList();
+        return conn.Query<LabelMatch>(sql, new { like, hasLangFilter, langs = langsLower, limit }).ToList();
     }
 
     /// <summary>
@@ -241,16 +242,17 @@ public sealed class MetadataRepository
     {
         using var conn = Open();
         var langsLower = languages?.Select(l => l.ToLowerInvariant()).ToList();
+        var hasLangFilter = langsLower is { Count: > 0 };
         try
         {
             var sql = @"
                 SELECT LabelFile AS File, Language, Key, Value
                 FROM LabelFts
                 WHERE LabelFts MATCH @q
-                  AND (@langs IS NULL OR LOWER(Language) IN @langs)
+                  AND (@hasLangFilter = 0 OR LOWER(Language) IN @langs)
                 ORDER BY rank
                 LIMIT @limit";
-            return conn.Query<LabelMatch>(sql, new { q = query, langs = langsLower, limit }).ToList();
+            return conn.Query<LabelMatch>(sql, new { q = query, hasLangFilter, langs = langsLower, limit }).ToList();
         }
         catch (Microsoft.Data.Sqlite.SqliteException)
         {
@@ -894,10 +896,14 @@ public sealed class MetadataRepository
         while (splitIdx < raw.Length && char.IsLetter(raw[splitIdx])) splitIdx++;
         var prefix = splitIdx > 0 ? raw.Substring(0, splitIdx) : raw;
         var suffix = splitIdx < raw.Length ? raw.Substring(splitIdx) : string.Empty;
+        var rawWithAt = "@" + raw;
+        var hasSuffix = suffix.Length > 0;
+        var suffixWithAt = hasSuffix ? "@" + suffix : string.Empty;
 
         // Normalize to lowercase so both 'en-US' (Windows filesystem) and 'en-us'
         // (Linux filesystem, Microsoft packages) match the caller's request.
         var langsLower = languages?.Select(l => l.ToLowerInvariant()).ToList();
+        var hasLangFilter = langsLower is { Count: > 0 };
         using var conn = Open();
         // Try two shapes: Key == raw (e.g. "SYS12345") in file=prefix,
         // or Key == suffix (e.g. "12345") in file=prefix. Fall back to
@@ -905,13 +911,33 @@ public sealed class MetadataRepository
         var sql = @"
             SELECT LabelFile AS File, Language, Key, Value
             FROM Labels
-            WHERE (@langs IS NULL OR LOWER(Language) IN @langs)
+            WHERE (@hasLangFilter = 0 OR LOWER(Language) IN @langs)
               AND (
-                    (LabelFile = @prefix AND Key IN (@raw, @suffix))
-                 OR Key = @raw
+                    (LabelFile = @prefix COLLATE NOCASE
+                        AND (
+                             Key = @raw COLLATE NOCASE
+                          OR Key = @rawWithAt COLLATE NOCASE
+                          OR (@hasSuffix = 1 AND (
+                                 Key = @suffix COLLATE NOCASE
+                              OR Key = @suffixWithAt COLLATE NOCASE
+                             ))
+                        )
+                    )
+                 OR Key = @raw COLLATE NOCASE
+                 OR Key = @rawWithAt COLLATE NOCASE
               )
             ORDER BY LabelFile, Language";
-        return conn.Query<LabelMatch>(sql, new { langs = langsLower, prefix, raw, suffix }).ToList();
+        return conn.Query<LabelMatch>(sql, new
+        {
+            hasLangFilter,
+            langs = langsLower,
+            prefix,
+            raw,
+            rawWithAt,
+            hasSuffix,
+            suffix,
+            suffixWithAt
+        }).ToList();
     }
 
     /// <summary>

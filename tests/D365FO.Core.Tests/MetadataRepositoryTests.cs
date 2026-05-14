@@ -98,4 +98,48 @@ public class MetadataRepositoryTests : IDisposable
         repo.ApplyExtract(ExtractBatch.Empty("Contoso") with { IsCustom = true }, sourceFingerprint: null);
         Assert.Equal("42:1234567890", repo.GetModelFingerprints()["Contoso"]);
     }
+
+    [Fact]
+    public void ResolveLabel_handles_at_prefixed_keys_and_multi_language_filter()
+    {
+        var repo = new MetadataRepository(_dbPath);
+        repo.EnsureSchema();
+
+        using var conn = new Microsoft.Data.Sqlite.SqliteConnection(repo.ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            INSERT INTO Models(Name,IsCustom) VALUES('AppFound',0);
+            INSERT INTO Labels(LabelId,LabelFile,Language,Key,Value) VALUES
+            (1,'SYS','en-US','@SYS321182','Project details'),
+            (2,'SYS','cs','@SYS321182','Detaily projektu');";
+        cmd.ExecuteNonQuery();
+
+        var hits = repo.ResolveLabel("@SYS321182", new[] { "en-us", "cs" });
+
+        Assert.Equal(2, hits.Count);
+        Assert.Contains(hits, h => h.Language.Equals("en-US", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(hits, h => h.Language.Equals("cs", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void SearchLabels_handles_multi_language_filter_without_sqlite_row_value_error()
+    {
+        var repo = new MetadataRepository(_dbPath);
+        repo.EnsureSchema();
+
+        using var conn = new Microsoft.Data.Sqlite.SqliteConnection(repo.ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            INSERT INTO Models(Name,IsCustom) VALUES('AppFound',0);
+            INSERT INTO Labels(LabelId,LabelFile,Language,Key,Value) VALUES
+            (1,'SYS','en-US','@SYS321182','Project details'),
+            (2,'SYS','cs','@SYS321182','Detaily projektu');";
+        cmd.ExecuteNonQuery();
+
+        var hits = repo.SearchLabels("project", new[] { "en-us", "cs" }, 100);
+
+        Assert.NotNull(hits);
+    }
 }
