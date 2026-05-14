@@ -108,7 +108,7 @@ If upstream `d365fo-mcp-server` updates its rule canon, sync this repo's [`.gith
 | `get_edt_details` | `d365fo get edt <name>` |
 | `find_coc_extensions` | `d365fo find coc <Class>[::<method>]` |
 | `get_security_coverage_for_object` | `d365fo get security <obj> --type <kind>` |
-| `search_labels` | `d365fo search label <q> --lang en-us,cs` |
+| `search_labels` | `d365fo search label <q> --lang 'en-us,cs'` |
 | `get_menu_item_details` | `d365fo get menu-item <name>` |
 | `get_table_relations` | `d365fo find relations <table>` |
 | `generate_smart_form` | `d365fo generate form <Name> --pattern <P>` (all 9 patterns: `SimpleList`, `SimpleListDetails`, `DetailsMaster`, `DetailsTransaction`, `Dialog`, `TableOfContents`, `Lookup`, `ListPage`, `Workspace`) |
@@ -121,7 +121,7 @@ If upstream `d365fo-mcp-server` updates its rule canon, sync this repo's [`.gith
 | `d365fo get form\|role\|duty\|privilege\|query\|view\|entity\|report\|service\|service-group` | Full details for each object type. |
 | `d365fo find extensions <Target>` | Enumerate Table / Form / Edt / Enum extensions targeting an object. |
 | `d365fo find handlers <Source>` | Event subscribers bound to a form / table / delegate. |
-| `d365fo resolve label @SYS12345 [--lang …]` | Resolve an `@File+Key` token to its text across indexed languages. |
+| `d365fo resolve label '@SYS12345' [--lang 'en-us,cs']` | Resolve an `@File+Key` token to its text across indexed languages (PowerShell-safe form). |
 | `d365fo read class\|table\|form <Name> [--method X] [--declaration]` | Read embedded X++ source from the AOT XML. |
 | `d365fo models list` / `d365fo models deps <Name>` | List indexed models or show their Descriptor-declared dependency graph. |
 | `d365fo index extract --model <Name>` | Incremental per-model re-extract. |

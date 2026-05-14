@@ -67,6 +67,8 @@ dotnet build d365fo-cli.slnx -c Release
 
 ```powershell
 function d365fo { dotnet run --project C:\path\to\d365fo-cli\src\D365FO.Cli -- @args }
+# local dev path
+function d365fo { dotnet run --project D:\sandboxs\d365fo_ai\d365fo-cli\src\D365FO.Cli -- @args }
 ```
 
 **Self-contained binary (for distribution):**
@@ -81,6 +83,9 @@ dotnet publish src/D365FO.Cli -c Release -r win-x64 --self-contained
 ```sh
 # Point at your packages folder
 $env:D365FO_PACKAGES_PATH = "K:\AosService\PackagesLocalDirectory"
+# local dev path
+net use Z: \\dvhd10041vm\DevShare /user:dvhd10041vm\localadmin pass@word1 /persistent:yes
+$env:D365FO_PACKAGES_PATH = "Z:\AosService\PackagesLocalDirectory"
 
 # Build + populate the index
 d365fo index build
@@ -94,8 +99,12 @@ d365fo index status --output json
 d365fo search table Cust --output json
 d365fo get table CustTable --output json
 d365fo find coc SalesTable::insert --output json
-d365fo resolve label @SYS12345 --lang en-us,cs
+d365fo resolve label '@SYS12345' --lang 'en-us,cs'
 ```
+
+PowerShell note: quote label tokens that start with `@` and quote CSV `--lang`
+values so they are passed as a single argument. In Bash/Zsh either quoted or
+unquoted forms work.
 
 ### Scaffold your first object
 
@@ -184,7 +193,7 @@ Reference the `SKILL.md` files from `skills/anthropic/` in your session prompt o
 | Modify existing AOT XML — targeted method body edit (inside CDATA) | ⚠️ `replace_string_in_file` / `multi_replace_string_in_file` — allowed for method bodies only; run `d365fo index refresh` after | ✅ `d365fo generate … --overwrite` for full-file replace |
 | Modify existing AOT XML — structural change (add field, index, relation…) | ❌ `replace_string_in_file` — corrupts XML structure | ✅ `d365fo generate extension … --overwrite` or VS AOT |
 | Search for a label | ❌ | ✅ `d365fo search label "<text>" --output json` |
-| Resolve a label key | ❌ | ✅ `d365fo resolve label @SYS12345 --lang en-us,cs` |
+| Resolve a label key | ❌ | ✅ `d365fo resolve label '@SYS12345' --lang 'en-us,cs'` |
 | Trace security (Role → Duty → Privilege) | ❌ | ✅ `d365fo get security <Role> --type Role --output json` |
 | Run best-practice check | ❌ | ✅ `d365fo bp check --output json` (Windows VM only, on user request) |
 | Inspect model dependencies | ❌ | ✅ `d365fo get model <Name> --output json` |

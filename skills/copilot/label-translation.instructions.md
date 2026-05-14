@@ -13,8 +13,8 @@ applyTo: '**/*.xpp,**/AxLabelFile/**,**/*.label.txt,**/*Labels*.xml'
 ## 1. Reuse first — search before you create
 
 ```sh
-d365fo search label "Customer account" --lang en-us,cs --output json
-d365fo resolve label @SYS4724 --lang en-us,cs --output json     # confirm an existing token
+d365fo search label "Customer account" --lang 'en-us,cs' --output json
+d365fo resolve label '@SYS4724' --lang 'en-us,cs' --output json # confirm an existing token (PowerShell)
 ```
 
 - Pick an existing `key` if any value matches your intent exactly.

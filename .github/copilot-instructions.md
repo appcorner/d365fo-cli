@@ -82,7 +82,7 @@ When the user just wants to *understand* code, never edit:
 | Find which Microsoft pattern peers already use | `d365fo find form-patterns --table <T> --output json` |
 | Find forms similar to a known one | `d365fo find form-patterns --similar-to <Form> --output json` |
 | Find inbound/outbound table relations | `d365fo find relations <Table> --output json` |
-| Resolve a label token | `d365fo resolve label @SYS12345 --lang en-us,cs` |
+| Resolve a label token | `d365fo resolve label '@SYS12345' --lang 'en-us,cs'` |
 | Trace security coverage | `d365fo get security <Object> --type <Kind>` |
 
 > **`--output json` is mandatory** in agent contexts. Without it the CLI may render rich console output that wastes tokens.
@@ -209,7 +209,7 @@ These apply to every X++ snippet you generate, regardless of how it gets to disk
 1. **NEVER guess method signatures.** Run `d365fo get class <Name>` (or `d365fo read class <Name> --declaration`) before writing a CoC wrapper or override.
 2. **NEVER use `today()`** — it ignores user time-zone. Use `DateTimeUtil::getToday(DateTimeUtil::getUserPreferredTimeZone())`.
 3. **NEVER call functions in `where` clauses** — assign to a local first. The query optimizer can't index function expressions.
-4. **NEVER use hardcoded strings in `Info()` / `warning()` / `error()`** — every UI string must be `@File:Label`. Use `d365fo search label "<text>"` first; `d365fo resolve label @SYS<key>` to confirm.
+4. **NEVER use hardcoded strings in `Info()` / `warning()` / `error()`** — every UI string must be `@File:Label`. Use `d365fo search label "<text>"` first; in PowerShell use `d365fo resolve label '@SYS<key>'` to confirm.
 5. **NEVER nest `while select` loops** — use `join` clauses, `exists join` / `notExists join`, or pre-load to a `Map` / temp table.
 6. **ALWAYS** search labels with `d365fo search label` before introducing a new one. **Exception:** when adding a field whose EDT already has a label, do **NOT** set `--label` on the field — it inherits from the EDT. Override only deliberately.
 7. **ALWAYS** write meaningful `/// <summary>` on public/protected classes and methods (BP: `BPXmlDocNoDocumentationComments`).
@@ -374,7 +374,7 @@ Verified against [learn:xpp-conditional](https://learn.microsoft.com/en-us/dynam
 | `BPErrorEDTNotMigrated` | EDT relations must use `EDT.Relations` element, not legacy table-level relations. |
 | `BPCheckNestedLoopinCode` | No nested `while select` loops — use joins. |
 | `BPCheckAlternateKeyAbsent` | Every table needs an alternate key (`AlternateKey = Yes` on a unique index). |
-| `BPErrorUnknownLabel` | Label IDs referenced in code must exist in the indexed label files. Run `d365fo resolve label @File+Key` to confirm. |
+| `BPErrorUnknownLabel` | Label IDs referenced in code must exist in the indexed label files. In PowerShell run `d365fo resolve label '@File+Key'` to confirm. |
 | `BPXmlDocNoDocumentationComments` | Public/protected members need meaningful `/// <summary>` doc comments. |
 | `BPDuplicateMethod` | No duplicate method definitions across the inheritance chain in the same model. |
 

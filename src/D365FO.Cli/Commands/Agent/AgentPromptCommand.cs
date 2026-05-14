@@ -79,7 +79,7 @@ not invent a name.
 | Existing CoC wrappers | `d365fo find coc <Class>::<method> --output json` |
 | Event handlers | `d365fo find handlers <Target> --output json` |
 | Relations | `d365fo find relations <Table> --output json` |
-| Resolve label | `d365fo resolve label @SYS12345 --lang en-us,cs` |
+| Resolve label | `d365fo resolve label '@SYS12345' --lang 'en-us,cs'` |
 | Security trace | `d365fo get security <Object> --type <Kind>` |
 
 ## 🧱 Scaffolding commands

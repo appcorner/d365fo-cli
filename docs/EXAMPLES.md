@@ -80,8 +80,11 @@ already use for the same table — then pass that pattern straight into
 ### `resolve label` — look up a label token
 
 ```sh
-d365fo resolve label @SYS12345 --lang en-US,cs
+d365fo resolve label '@SYS12345' --lang 'en-US,cs'
 ```
+
+PowerShell: keep quotes around both the `@...` token and the CSV `--lang`
+value so argument parsing does not split or swallow them.
 
 ### `read` — pull X++ source from AOT XML
 
@@ -456,7 +459,7 @@ Flags: `--skip-labels`, `--skip-edts`, `--skip-security`.
 # Read
 d365fo search label "Customer invoice"
 d365fo search label "customer invoice" --fts        # rank-sorted FTS5
-d365fo get label @SYS12345 --language en-us
+d365fo get label SYS '@SYS12345' --lang en-us
 
 # Write \u2014 atomic, preserves comments, BOM UTF-8
 d365fo label create NewKey "New value" --file path/Foo.en-us.label.txt
